@@ -1,8 +1,10 @@
 import copy
-
+from contextlib import contextmanager
+from memory_profiler import profile
 import numpy as np
 import rasterio
-from contextlib import contextmanager
+from rasterio.mask import mask
+import shapely
 import pdb
 
 
@@ -27,16 +29,16 @@ def mem_file(arr, metadata, *to_del_arr):
         src -> rasterio.DatasetReader
     """
     with rasterio.MemoryFile() as memfile:
-        with memfile.open(**metadata) as src: # Open as DatasetWriter
+        with memfile.open(**metadata) as data: # Open as DatasetWriter
             if arr.ndim == 2:
-                src.write_band(1, arr)
+                data.write_band(1, arr)
             else:
-                src.write(arr.astype(metadata['dtype']))
+                data.write(arr.astype(metadata['dtype']))
             for arr in to_del_arr:
                 del arr
 
-        with memfile.open() as src:  # Reopen as DatasetReader
-            yield src
+        with memfile.open() as data:  # Reopen as DatasetReader
+          yield data
 
 
 @contextmanager
@@ -60,7 +62,30 @@ def calc_ndvi(src_red, src_nir):
     # grab and copy metadata of one of the two array
     ndvi_meta = copy.deepcopy(src_red.meta)
     ndvi_meta.update(count=1, dtype="float32", driver='GTiff')
-    return mem_file(ndvi_arr, ndvi_meta, red_arr, nir_arr)
+    return mem_file(ndvi_arr, ndvi_meta, ndvi_arr)
+
+
+@contextmanager
+def get_aoi(src, window):
+    """
+    Writes an area of interest (aoi) to disk
+    *********
+
+    params:
+        src -> rasterio.DatasetReader
+        window -> rasterio.windows.Window
+
+    yield:
+        src -> resampled rasterio.DatasetReader
+    """
+    aoi = src.read(window=window)
+    new_meta = src.meta.copy()
+    new_meta.update({
+        'driver': 'GTiff',
+        'height': window.height,
+        'width': window.width,
+        'transform': rasterio.windows.transform(window, src.transform)})
+    return mem_file(aoi, new_meta, aoi)
 
 
 @contextmanager
@@ -104,7 +129,6 @@ def resample_raster(src, scale=2):
     return mem_file(arr, new_meta, arr)
 
 
-
 @contextmanager
 def create_raster_mask(src, vals):
     """
@@ -123,11 +147,11 @@ def create_raster_mask(src, vals):
     mask_arr = np.ma.MaskedArray(arr, np.in1d(arr, vals))
     new_meta = copy.deepcopy(src.meta)
     new_meta.update(driver='GTiff', nbits=1)
-    return mem_file(mask_arr.mask, new_meta, arr, mask_arr)
+    return mem_file(mask_arr.mask, new_meta, mask_arr.mask)
 
 
-
-def mask_and_fill(arr, mask, fill_value=0):
+@contextmanager
+def apply_raster_mask(src, src_mask, fill_value=0):
     """
     Mask an array using a mask array and fill it with
     a fill value.
@@ -141,47 +165,43 @@ def mask_and_fill(arr, mask, fill_value=0):
     return:
         numpy masked array
     """
+    arr = src.read()
+    mask = src_mask.read()
+
     # check arr and mask have the same dim
     assert (arr.shape == mask.shape),\
         "Array and mask must have the same dimensions!"
     masked_arr = np.ma.array(arr, mask=mask)
 
     # Fill masked vales with zero !! maybe to be changed
-    return np.ma.filled(masked_arr, fill_value=fill_value)
+    m_filled = np.ma.filled(masked_arr, fill_value=fill_value)
+    return mem_file(m_filled, src.meta, m_filled)
 
 
-def build_task(oper):
-    try:
-        src = rasterio.open("tests/T37MBN_20190628T073621_SCL_20m.jp2")
-        print(src.meta)
-        #pdb.set_trace()
-        for o, params in oper:
-            new_src = o(src, params)
-            print(new_src.meta)
-    finally:
-        src.close()
+def extract_from_raster(src, gdf):
+    """
+    Extract shapes geometries from raster
+    """
+    
+    # Numpy array of shapely objects
+    geoms = gdf.geometry.values
 
+    # convert all labels_id to int
+    gdf.id = gdf.id.astype(int)
 
-class Chain():
-    def __init__(self, kind=None):
-        self.kind = kind
-    def my_print(self):
-        print (self.kind)
-        return self
-    def line(self):
-        self.kind = 'line'
-        return self
-    def bar(self):
-        self.kind='bar'
-        return self
+    X = np.array([]).reshape(0,src.count)# pixels for training
+    y = np.array([], dtype=np.int64) # labels for training
+    for index, geom in enumerate(geoms):
+        # Transform to GeoJSON format
+        # [{'type': 'Point', 'coordinates': (746418.3300011896, 3634564.6338985614)}]
+        feature = [shapely.geometry.mapping(geom)]
 
-if __name__ == "__main__":
-#    build_task([(resample_raster2, 2), (create_raster_mask2,[3,7,8,9,10])])
-    with rasterio.open("tests/T37MBN_20190628T073621_SCL_20m.jp2") as src:
-        with resample_raster(src) as resampled:
-            write_raster(resampled, 'T37MBN_20190628T073621_SCL_res_10m.tif')
-            print(resampled.meta)
-            with create_raster_mask(resampled, [3,7,8,9,10]) as mask:
-                unique, counts = np.unique(mask.read(), return_counts=True)
-                print(dict(zip(unique, counts)))
-                write_raster(mask, 'mask.tif')
+        # the mask function returns an array of the raster pixels within this feature
+        # out_image.shape == (band_count,1,1) for one Point Object
+        out_image, out_transform = mask(src, feature, crop=True)
+
+        # reshape the array to [pixel values, band_count]
+        out_image_reshaped = out_image.reshape(-1, src.count)
+        y = np.append(y,[gdf['id'][index]] * out_image_reshaped.shape[0])
+        X = np.vstack((X,out_image_reshaped))
+    return X,y

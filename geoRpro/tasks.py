@@ -1,8 +1,4 @@
-import aope as ao
-import rope as ro
-
 import json
-from contextlib import ExitStack
 
 json_arr1 = '''
 {
@@ -40,10 +36,10 @@ json_arr3 = '''
 }
 '''
 
-rules = {'create_mask': ao.create_mask_arr,
-         'mask': ao.mask_and_fill,
-         'resample': ro.resample_raster
-         }
+#rules = {'create_mask': ao.create_mask_arr,
+#         'mask': ao.mask_and_fill,
+#         'resample': ro.resample_raster
+#         }
 
 class TasksParser:
 
@@ -91,27 +87,13 @@ class TasksParser:
             return None
 
 
-class MaskRaster:
-
-    TASKNAME = 'mask_raster'
-
-    def __init__(self, p):
-        self.p = p
-        self.task = p.get_task(self.TASKNAME)
-
-    def build_task(self):
-        for operation in self.p.list_task_operations(self.TASKNAME):
-            rules[operation]()
-
-
-
 if __name__ == "__main__":
 
-    arr1 = json.loads(json_arr1)
-    p1 = TasksParser(arr1)
-
-    arr2 = json.loads(json_arr2)
-    p2 = TasksParser(arr2)
-
-    arr3 = json.loads(json_arr3)
-    p3 = TasksParser(arr3)
+#    arr1 = json.loads(json_arr1)
+#    p1 = TasksParser(arr1)
+#
+#    arr2 = json.loads(json_arr2)
+#    p2 = TasksParser(arr2)
+#
+#    arr3 = json.loads(json_arr3)
+#    p3 = TasksParser(arr3)
