@@ -1,3 +1,5 @@
+import geoRpro.aope as ao
+
 import copy
 from contextlib import contextmanager
 from memory_profiler import profile
@@ -6,7 +8,12 @@ import rasterio
 from rasterio.mask import mask
 import shapely
 import pdb
+import logging
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# * - Series of raster operations yielding a rasterio.DatasetReader
 
 def write_raster(src, fname):
     with rasterio.open(fname, 'w', **src.meta) as dst:
@@ -29,14 +36,19 @@ def mem_file(arr, metadata, *to_del_arr):
         src -> rasterio.DatasetReader
     """
     with rasterio.MemoryFile() as memfile:
+        logger.debug("Opening memfile as DataSetWriter")
+        logger.debug(f"array shape: {arr.shape}")
         with memfile.open(**metadata) as data: # Open as DatasetWriter
             if arr.ndim == 2:
+                logger.debug(f"write band")
                 data.write_band(1, arr)
             else:
+                logger.debug(f"write array")
                 data.write(arr.astype(metadata['dtype']))
             for arr in to_del_arr:
                 del arr
 
+        logger.debug(f"Open memfile as DataSetReader")
         with memfile.open() as data:  # Reopen as DatasetReader
           yield data
 
@@ -53,15 +65,13 @@ def calc_ndvi(src_red, src_nir):
     yield:
         src_ndvi -> rasterio.DatasetReader
     """
+    logger.debug(f"Loading: {src_red.name} as red array")
     red_arr = src_red.read(1)
+    logger.debug(f"Loaded red array of shape: {red_arr.shape}")
+    logger.debug(f"Load: {src_nir.name} as nir array")
     nir_arr = src_nir.read(1)
-    np.seterr(divide='ignore', invalid='ignore')
-    ndvi_arr = (nir_arr.astype(np.float32)-red_arr.astype(np.float32))/ \
-               (nir_arr.astype(np.float32)+red_arr.astype(np.float32))
-
-    # grab and copy metadata of one of the two array
-    ndvi_meta = copy.deepcopy(src_red.meta)
-    ndvi_meta.update(count=1, dtype="float32", driver='GTiff')
+    logger.debug(f"Loaded nir array of shape: {nir_arr.shape}")
+    ndvi_arr, ndvi_meta = ao.aope_ndvi(red_arr, nir_arr, src_red.meta)
     return mem_file(ndvi_arr, ndvi_meta, ndvi_arr)
 
 
@@ -137,21 +147,20 @@ def create_raster_mask(src, vals):
     *********
 
     params:
-        arr -> numpy array
+        src -> numpy array or rasterio.DatasetReader
+        meta -> metadata associated with src
         vals -> a list of values
-    return:
-        numpy mask array
+    yield:
+        src -> binary (0=not masked, 1=masked) rasterio.DatasetReader
 
     """
     arr = src.read()
-    mask_arr = np.ma.MaskedArray(arr, np.in1d(arr, vals))
-    new_meta = copy.deepcopy(src.meta)
-    new_meta.update(driver='GTiff', nbits=1)
-    return mem_file(mask_arr.mask, new_meta, mask_arr.mask)
+    mask, meta = ao.aope_mask(vals, arr, src.meta)
+    return mem_file(mask.mask, meta, mask.mask)
 
 
 @contextmanager
-def apply_raster_mask(src, src_mask, fill_value=0):
+def apply_raster_mask(src, mask, fill_value=0):
     """
     Mask an array using a mask array and fill it with
     a fill value.
@@ -160,29 +169,28 @@ def apply_raster_mask(src, src_mask, fill_value=0):
 
     params:
         arr -> numpy array to be masked
-        mask -> numpy boolean mask array
+        mask -> numpy boolean mask array or a rasterio.Datareader
 
     return:
         numpy masked array
     """
+    if not isinstance(mask, np.ndarray):
+        mask = mask.read()
     arr = src.read()
-    mask = src_mask.read()
-
-    # check arr and mask have the same dim
-    assert (arr.shape == mask.shape),\
-        "Array and mask must have the same dimensions!"
-    masked_arr = np.ma.array(arr, mask=mask)
-
-    # Fill masked vales with zero !! maybe to be changed
-    m_filled = np.ma.filled(masked_arr, fill_value=fill_value)
+    m_filled = ao.aope_apply_mask(arr, mask, fill_value)
     return mem_file(m_filled, src.meta, m_filled)
 
 
 def extract_from_raster(src, gdf):
     """
     Extract shapes geometries from raster
+    params:
+        src -> rasterio.DatasetReader
+        gdf -> geodataframe ('classname', 'id', 'geometry')
+
+    yield:
+        X,y numpy arrays
     """
-    
     # Numpy array of shapely objects
     geoms = gdf.geometry.values
 
