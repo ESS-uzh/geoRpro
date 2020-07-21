@@ -1,40 +1,50 @@
 import os
-import rasterio
-from contextlib import ExitStack
-import geoRpro.rope as ro
-import geoRpro.aope as ao
-from sent2 import Sentinel2
-import geopandas as gpd
-import numpy as np
-import pdb
 import logging
 
+import geopandas as gpd
+import rasterio
+from rasterio.windows import Window
+import numpy as np
+
+import geoRpro.rope as ro
+import geoRpro.aope as ao
+from geoRpro.utils import write_rasters_as_stack
+from geoRpro.sent2 import Sentinel2
+
+import pdb
+
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.WARNING)
 
 
-def gen_raster_mask(fpath, outdir, fname=None):
+# * some raster routine examples
+
+
+def _gen_fname(inp_fpath, append):
+    inp_fname = os.path.basename(inp_fpath)
+    inp_name = '_'.join(inp_fname.split('.')[0].split('_')[:3])
+    return inp_name + append
+
+def gen_raster_mask(fpath, outdir, window):
+    """resample a raster and generate a mask over an AOI"""
     with rasterio.open(fpath) as src:
         with ro.resample_raster(src) as resampled:
-            print(resampled.meta)
-            with ro.create_raster_mask(resampled, [3,7,8,9,10]) as mask:
-                ro.write_raster(mask, os.path.join(outdir, fname))
+            with ro.get_aoi(resampled, window) as aoi:
+                fname_r = _gen_fname(fpath, '_resampled_aoi.tiff')
+                ro.write_raster(aoi, os.path.join(outdir, fname_r))
+                with ro.create_raster_mask(aoi, [3,7,8,9,10]) as mask:
+                    fname_m = _gen_fname(fpath, '_mask_aoi.tiff')
+                    ro.write_raster(mask, os.path.join(outdir, fname_m))
 
 
-def cal_raster_ndvi(fpathr, fpathn, outdir, fname=None):
+def cal_raster_ndvi(fpathr, fpathn, outdir, fname, window):
+    "calc ndvi over an AOI"
     with rasterio.open(fpathr) as src_r:
         with rasterio.open(fpathn) as src_n:
-            with ro.calc_ndvi(src_r, src_n) as ndvi:
-                ro.write_raster(ndvi, os.path.join(outdir, fname))
-
-
-def extract_from_raster(fpath, outdir, fname=None):
-    with rasterio.open(fpath) as src:
-        with rasterio.open(os.path.join(outdir,"scl_mask.tiff")) as src_mask:
-            with ro.apply_raster_mask(src, src_mask) as masked:
-                gdf  = gpd.read_file(os.path.join(INDIR, "all_points/all_points.shp"))
-                ro.write_raster(masked, os.path.join(outdir,fname))
-                return ro.extract_from_raster(masked, gdf)
+            with ro.get_aoi(src_r, window) as aoi_r:
+                with ro.get_aoi(src_n, window) as aoi_n:
+                    with ro.calc_ndvi(aoi_r, aoi_n) as ndvi:
+                        ro.write_raster(ndvi, os.path.join(outdir, fname))
 
 
 if __name__ == "__main__":
@@ -42,62 +52,41 @@ if __name__ == "__main__":
     INDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_inp"
     OUTDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_out"
 
-    def wf0():
-        logger.info("Start workflow")
-        p = Sentinel2(os.path.join(INDIR, "S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R10m"))
-        print("generate ndvi")
-        cal_raster_ndvi(p.sfpaths[2][0], p.sfpaths[3][0], OUTDIR, 'ndvi.tiff')
 
     def wf1():
-        inpScl = os.path.join(INDIR, "T37MBN_20190628T073621_SCL_20m.jp2")
-        p = Sentinel2(os.path.join(INDIR, "S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R10m"))
+        s10 = Sentinel2(os.path.join(INDIR, "S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R10m"))
+        s20 = Sentinel2(os.path.join(INDIR, "S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R20m"))
 
-        print("generate a mask")
-        gen_raster_mask(inpScl, OUTDIR, 'scl_mask.tiff')
+        fpath_scl = s20.get_fpaths('SCL_20m')[0]
+        # resample and generate mask over AOI
+        gen_raster_mask(fpath_scl, OUTDIR, Window(0,0,4000,2000))
 
-        print("generate ndvi")
-        cal_raster_ndvi(p.sfpaths[2][0], p.sfpaths[3][0], OUTDIR, 'ndvi.tiff')
+        # calc ndvi over AOI
+        cal_raster_ndvi(s10.get_fpaths('B04_10m')[0], s10.get_fpaths('B08_10m')[0], OUTDIR, 'ndvi_aoi.tiff', Window(0,0,4000,2000))
 
-        p.sfpaths.append((os.path.join(OUTDIR, 'ndvi.tiff'), 'ndvi'))
-
-        features = []
-        for i,r in enumerate(p.sfpaths):
-            fname = r[1] + '_m.tiff'
-            print(f"extract pixel values from: {r[1]}")
-            X,y = extract_from_raster(r[0], OUTDIR, fname)
-            print(X.shape, y.shape)
-            features.append(X)
-        features = np.concatenate(features, axis=1)
-        print(features)
-
-
-    def wf2():
-        inpScl = os.path.join(INDIR, "T37MBN_20190628T073621_SCL_20m.jp2")
-        p = Sentinel2(os.path.join(INDIR, "S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R10m"))
-
-        print("generate a mask")
-        gen_raster_mask(inpScl, OUTDIR, 'scl_mask.tiff')
-
-        print("generate ndvi")
-        cal_raster_ndvi(p.sfpaths[2][0], p.sfpaths[3][0], OUTDIR, 'ndvi.tiff')
-
-        p.sfpaths.append((os.path.join(OUTDIR, 'ndvi.tiff'), 'ndvi'))
-
-        gdf  = gpd.read_file(os.path.join(INDIR, "all_points/all_points.shp"))
-
-        with rasterio.open(os.path.join(OUTDIR,"scl_mask.tiff")) as src_mask:
+        # mask sent2 bands over AOI
+        with rasterio.open(Sentinel2(OUTDIR).get_fpaths('SCL_mask_aoi')[0]) as src_mask:
             mask = src_mask.read()
-            features = []
-            for i,r in enumerate(p.sfpaths):
-                with rasterio.open(r[0]) as src:
-                    fname = r[1] + '_m.tiff'
-                    with ro.apply_raster_mask(src, mask) as masked:
-                        ro.write_raster(masked, os.path.join(OUTDIR,fname))
-                        print(f"extract pixel values from: {r[1]}")
-                        X,y = ro.extract_from_raster(masked, gdf)
-                        print(X.shape, y.shape)
-                        features.append(X)
-        features = np.concatenate(features, axis=1)
-        print(features)
+            rfiles = s10.get_fpaths('B02_10m','B03_10m', 'B04_10m', 'B08_10m')
+            rfiles.append(os.path.join(OUTDIR, 'ndvi_aoi.tiff'))
+            for i,r in enumerate(rfiles):
+                with rasterio.open(r) as src:
+                    fname_f_masked = _gen_fname(r, '_masked_aoi.tiff')
+                    with ro.get_aoi(src, Window(0,0,4000,2000)) as aoi:
+                        with ro.apply_raster_mask(aoi, mask, -9999) as masked:
+                            ro.write_raster(masked, os.path.join(OUTDIR,fname_f_masked))
 
-    wf0()
+        # stack sent2 bands and ndvi
+        s10_m = Sentinel2(OUTDIR)
+        rfiles_m = s10_m.get_fpaths('B02_masked_aoi','B03_masked_aoi', 'B04_masked_aoi', 'B08_masked_aoi')
+        rfiles_m.append(os.path.join(OUTDIR, 'ndvi_aoi.tiff'))
+        
+        with rasterio.open(rfiles_m[0]) as first:
+            meta = first.meta
+            meta.update(count = len(rfiles_m))
+            meta.update(driver = 'GTiff')
+        #pdb.set_trace()
+        write_rasters_as_stack(rfiles_m, meta, 'stack', OUTDIR)
+
+
+    wf1()

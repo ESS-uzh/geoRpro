@@ -3,30 +3,6 @@ import rasterio
 import numpy as np
 
 
-def write_arr_as_raster(arr, meta, fname, outdir):
-    """
-    Save a numpy array as geo-raster to disk
-    *********
-    params:
-        arr ->  3D numpy array to save as raster
-        meta -> metadata for the new raster
-        outdir -> output directory
-    return:
-        fpath -> full path of the new raster
-    """
-    assert (meta['driver'] == 'GTiff'),\
-        "Please use GTiff driver to write to disk. \
-    Passed {} instead.".format(meta['driver'])
-
-    assert (arr.ndim == 3),\
-        "np_array must have ndim = 3. \
-Passed np_array of dimension {} instead.".format(arr.ndim)
-
-    fpath = os.path.join(outdir, fname + '_.tiff')
-
-    with rasterio.open(fpath, 'w', **meta) as dst:
-        dst.write(arr)
-    return fpath
 
 
 def aope_ndvi(red_arr, nir_arr, meta):

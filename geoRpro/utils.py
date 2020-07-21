@@ -1,6 +1,74 @@
-import numpy as np
+import os
 import json
 
+import rasterio
+import numpy as np
+
+import geoRpro.aope as ao
+
+
+## * I/O related
+
+def write_arr_as_raster(arr, meta, fname, outdir):
+    """
+    Save a numpy array as geo-raster to disk
+    *********
+    params:
+        arr ->  3D numpy array to save as raster
+        meta -> metadata for the new raster
+        fname -> name of the file (without ext)
+        outdir -> output directory
+    return:
+        fpath -> full path of the new raster
+    """
+    assert (meta['driver'] == 'GTiff'),\
+        "Please use GTiff driver to write to disk. \
+    Passed {} instead.".format(meta['driver'])
+
+    assert (arr.ndim == 3),\
+        "np_array must have ndim = 3. \
+Passed np_array of dimension {} instead.".format(arr.ndim)
+
+    fpath = os.path.join(outdir, fname + '_.tiff')
+
+    with rasterio.open(fpath, 'w', **meta) as dst:
+        dst.write(arr)
+    return fpath
+
+
+def write_rasters_as_stack(rfiles, meta, fname, outdir, window=None, mask=None):
+    """
+    Stack several rasters layer on a single raster and
+    save it to disk
+    *********
+    params:
+        rfiles -> list of raster path to be stacked
+        meta -> metadata of the final raster stack
+        fname -> name of the final raster stack
+        outdir -> output directory
+        mask -> 3D mask array
+    """
+    assert (meta['driver'] == 'GTiff'),\
+        "Please use GTiff driver to write to disk. \
+    Passed {} instead.".format(meta['driver'])
+
+    fpath = os.path.join(outdir, fname + '.tiff')
+
+    with rasterio.open(fpath, 'w', **meta) as dst:
+        for _id, fl in enumerate(rfiles, start=1):
+            # open raster files one by one (fl)
+            with rasterio.open(fl) as src1:
+                if mask:
+                    # read all layers of fl and mask them
+                    arr, _ = ao.aope_apply_mask(src1.read(), mask)
+                else:
+                    arr = src1.read(1)
+                dst.write_band(_id, arr.astype(meta['dtype']))
+    return fpath
+
+
+
+## * JSON related
 
 # Serializing Python Objects not supported by JSON
 class NumpyEncoder(json.JSONEncoder):

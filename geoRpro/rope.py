@@ -1,14 +1,13 @@
-import geoRpro.aope as ao
-
 import copy
+import logging
 from contextlib import contextmanager
-from memory_profiler import profile
+
 import numpy as np
 import rasterio
 from rasterio.mask import mask
 import shapely
-import pdb
-import logging
+
+import geoRpro.aope as ao
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -16,8 +15,10 @@ logger.setLevel(logging.DEBUG)
 # * - Series of raster operations yielding a rasterio.DatasetReader
 
 def write_raster(src, fname):
+    logger.debug(f"Writing to disk..")
     with rasterio.open(fname, 'w', **src.meta) as dst:
         dst.write(src.read())
+    logger.debug(f"{fname} saved to disk")
     return fname
 
 
@@ -36,19 +37,19 @@ def mem_file(arr, metadata, *to_del_arr):
         src -> rasterio.DatasetReader
     """
     with rasterio.MemoryFile() as memfile:
-        logger.debug("Opening memfile as DataSetWriter")
-        logger.debug(f"array shape: {arr.shape}")
+        #logger.debug("Opening memfile as DataSetWriter")
+        #logger.debug(f"array shape: {arr.shape}")
         with memfile.open(**metadata) as data: # Open as DatasetWriter
             if arr.ndim == 2:
-                logger.debug(f"write band")
                 data.write_band(1, arr)
+                logger.debug(f"Saved band and metadata as DataSetWriter")
             else:
-                logger.debug(f"write array")
                 data.write(arr.astype(metadata['dtype']))
+                logger.debug(f"Saved array and metadata as DataSetWriter")
             for arr in to_del_arr:
                 del arr
 
-        logger.debug(f"Open memfile as DataSetReader")
+        #logger.debug(f"Open memfile as DataSetReader")
         with memfile.open() as data:  # Reopen as DatasetReader
           yield data
 
@@ -88,7 +89,9 @@ def get_aoi(src, window):
     yield:
         src -> resampled rasterio.DatasetReader
     """
+    logger.debug(f"Selecting AOI for window: {window}")
     aoi = src.read(window=window)
+    logger.debug(f"AOI has shape: {aoi.shape}")
     new_meta = src.meta.copy()
     new_meta.update({
         'driver': 'GTiff',
@@ -123,6 +126,7 @@ def resample_raster(src, scale=2):
     yield:
         src -> resampled rasterio.DatasetReader
     """
+    logger.debug(f"Resampling raster cells of a factor: {scale}")
     t = src.transform
 
     # rescale the metadata
@@ -155,6 +159,7 @@ def create_raster_mask(src, vals):
 
     """
     arr = src.read()
+    logger.debug(f"Masking raster values: {vals}")
     mask, meta = ao.aope_mask(vals, arr, src.meta)
     return mem_file(mask.mask, meta, mask.mask)
 
