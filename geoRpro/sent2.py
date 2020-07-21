@@ -13,7 +13,7 @@ class Sentinel2:
             r'(?P<tile_n>^T\d{2}MBN)'
             r'_(?P<date>[0-9]{8})'
             r'.*_(?P<band>B(02|03|04|05|06|07|08|8A|09|11|12)|AOT|SCL|TCI|WVP)'
-            r'.*(?P<fext>jp2$)'
+            r'(?P<attr>([\w]*))'
             )
 
     def __init__(self, dirpath):
@@ -27,7 +27,11 @@ class Sentinel2:
                     raise ValueError(f"Duplicate band '{match.group('band')} found. "
                                      f"The directory must contain unique bands only. ")
                 # build lookup table
-                self._lookup[match.group('band')] = [os.path.join(self.dirpath,f),
+                if match.group('attr'):
+                    key_lookup = match.group('band')+match.group('attr')
+                else:
+                    key_lookup = match.group('band')
+                self._lookup[key_lookup] = [os.path.join(self.dirpath,f),
                                                      match.group('date'),
                                                      match.group('tile_n')]
         self._verify_for_rfiles_match()
@@ -35,24 +39,24 @@ class Sentinel2:
     def get_all_bands(self):
         return list(self._lookup.keys())
 
-    
-    def get_rfiles(self, *bands):
+
+    def get_fpaths(self, *bands):
         rfiles = []
         for b in bands:
             try:
-                rfiles.append((b, self._lookup[b][0]))
+                rfiles.append(self._lookup[b][0])
             except KeyError:
-                print("This band: '{}' was not found".format(rf))
+                print("This band: '{}' was not found".format(b))
         return rfiles
 
-    
+
     def get_datetake(self, band):
         try:
             return self._lookup[band][1]
         except KeyError:
             print("This band: '{}' was not found".format(band))
-    
-    
+
+
     def get_tile_number(self, band):
         try:
             return self._lookup[band][2]
@@ -71,12 +75,13 @@ if __name__ == '__main__':
 
     basedir = '/home/diego/work/dev/ess_diego/github/goeRpro_inp'
 
-    # Work with scene classification 20m resolution
+    # Work with 20m resolution
     imgdir = os.path.join(basedir,'S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R20m')
     # some testing
+    import pdb
     p = Sentinel2(imgdir)
     print(p.get_all_bands())
-    print(p.get_rfiles('B02'))
-    print(p.get_datetake('B02'))
-    print(p.get_tile_number('B02'))
+    print(p.get_fpaths('B02_20m','B02'))
+    print(p.get_datetake('B02_20m'))
+    print(p.get_tile_number('B02_20m'))
 
