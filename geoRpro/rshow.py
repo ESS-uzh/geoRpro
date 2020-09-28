@@ -2,8 +2,9 @@ import os
 import rasterio
 from matplotlib import pyplot
 
-INDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_inp"
+INDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_inp/planet"
 OUTDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_out"
+OUTDIR_m = "/home/diego/work/dev/ess_diego/github/goeRpro_out/test_masking"
 
 def show_ndvi(fname, n):
     with rasterio.open(fname) as src:
@@ -28,17 +29,23 @@ def show_hist(arr):
     return axs.hist(arr.flatten(), bins=50)
 
 
+ndvii = os.path.join(OUTDIR, "ndvi_aoi.tiff")
+ndvi = os.path.join(OUTDIR_m, "ndvi_mask_aoi.tiff")
+ndvi_m = os.path.join(OUTDIR_m, "ndvi_masked_aoi.tiff")
 masked_b02 = os.path.join(OUTDIR, "T37MBN_20190628T073621_B02_masked_aoi.tiff") 
 scl_mask = os.path.join(OUTDIR, "T37MBN_20190628T073621_SCL_mask_aoi.tiff") 
 
-show_img(masked_b02, 1, 100, 2500)
-show_img(scl_mask, 2, 0, 1)
+show_ndvi(ndvii, 1)
+show_ndvi(ndvi, 2)
+show_ndvi(ndvi_m, 3)
+show_img(masked_b02, 4, 100, 2500)
+show_img(scl_mask, 5, 0, 1)
 
 with rasterio.open(masked_b02) as src:
         b02 = src.read(1)
 #with rasterio.open(masked_ndvi) as src1:
 #        ndvi_arr_m = src1.read(1)
-show_hist(b02)
+#show_hist(b02)
 #show_hist(ndvi_arr_m)
 
 pyplot.show()

@@ -1,5 +1,6 @@
 import os
 import re
+import pdb
 
 class Sentinel2:
     """
@@ -10,7 +11,7 @@ class Sentinel2:
     PATTERN = re.compile(
             # example pattern to match
             # T37MBN_20170718T075211_B02.jp2
-            r'(?P<tile_n>^T\d{2}MBN)'
+            r'(?P<tile_n>^T\d{2}\D{3})'
             r'_(?P<date>[0-9]{8})'
             r'.*_(?P<band>B(02|03|04|05|06|07|08|8A|09|11|12)|AOT|SCL|TCI|WVP)'
             r'(?P<attr>([\w]*))'
@@ -73,15 +74,21 @@ class Sentinel2:
 
 if __name__ == '__main__':
 
-    basedir = '/home/diego/work/dev/ess_diego/github/goeRpro_inp'
+    INDIR = "/home/diego/work/dev/data"
 
-    # Work with 20m resolution
-    imgdir = os.path.join(basedir,'S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R20m')
-    # some testing
-    import pdb
-    p = Sentinel2(imgdir)
-    print(p.get_all_bands())
-    print(p.get_fpaths('B02_20m','B02'))
-    print(p.get_datetake('B02_20m'))
-    print(p.get_tile_number('B02_20m'))
+    s10 = Sentinel2(os.path.join(INDIR, "amazon/S2A_MSIL2A_20200729T142741_N0214_R053_T20MNC_20200729T165425.SAFE/GRANULE/L2A_T20MNC_A026648_20200729T142736/IMG_DATA/R10m"))
+    fpath_tcl = s10.get_fpaths('TCL_10m')[0]
+
+
+
+    #basedir = '/home/diego/work/dev/ess_diego/github/goeRpro_inp'
+
+    ## Work with 20m resolution
+    #imgdir = os.path.join(basedir,'S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R20m')
+    ## some testing
+    #p = Sentinel2(imgdir)
+    #print(p.get_all_bands())
+    #print(p.get_fpaths('B02_20m','B02'))
+    #print(p.get_datetake('B02_20m'))
+    #print(p.get_tile_number('B02_20m'))
 

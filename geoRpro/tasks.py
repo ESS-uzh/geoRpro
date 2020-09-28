@@ -1,20 +1,23 @@
 import json
 
+
 json_arr1 = '''
 {
-    "mask_raster": {
-    "inp": "tests/T37MBN_20190628T073621_B04_10m.jp2",
-    "out": "tests/T37MBN_20190628T073621_B04_10m_masked.jp2",
+INDIR: {"/home/diego/work/dev/ess_diego/github/goeRpro_inp/S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R10m"}
+
+OUTDIR: {"/home/diego/work/dev/ess_diego/github/goeRpro_out/test_workflow"}
+
+WORKFLOW:{
+    "task1": {
+    "inp": "T37MBN_20190628T073621_SCL_20m.jp2",
     "operations": {
-       "resample_raster": {
-            "inp": "tests/T37MBN_20190628T073621_SCL_20m.jp2",
-            "scale": 2},
-        "create_mask": {
-            "values"; [3,7,8,9,10]},
-        "mask": {
-            "fill_value": 0}
-                 }
-         }
+       "resample_raster": {"scale": 2},
+       "get_aoi": {"window": (0, 0, 4000, 2000), "write": "_resampled_aoi.tiff"},
+       "binarize": {"values": (3, 7, 8, 9, 10), "write": "_mask_aoi.tiff"}
+        }
+    }
+}
+
 }
 '''
 
@@ -41,7 +44,10 @@ json_arr3 = '''
 #         'resample': ro.resample_raster
 #         }
 
-class TasksParser:
+class WorkFlowParser:
+    """
+
+    """
 
     TASKS = ['mask_raster', 'ndvi', 'extract_pixel_values']
     ATTR = ['inp', 'out', 'operations']
@@ -87,10 +93,36 @@ class TasksParser:
             return None
 
 
+class GeoRWf:
+    """
+    Collect and run chained raster operations
+    Use instances of geoRpro.RasterOp class
+    """
+    def __init__(self, srcs = None, all_opers = None):
+
+        if all_opers is None:
+            all_opers = []
+
+        if srcs is None:
+            srcs = []
+    
+        self.all_opers = all_opers
+        self.srcs = srcs
+        self.meta = None
+        self.arr = None
+
+    def add_oper(self, oper):
+        self.all_opers.append(oper)
+
+    def run_opers(self):
+        for oper in self.all_opers:
+            oper.run()
+
+
 if __name__ == "__main__":
 
-#    arr1 = json.loads(json_arr1)
-#    p1 = TasksParser(arr1)
+    arr1 = json.loads(json_arr1)
+    p1 = TasksParser(arr1)
 #
 #    arr2 = json.loads(json_arr2)
 #    p2 = TasksParser(arr2)
