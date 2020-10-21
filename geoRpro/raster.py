@@ -15,224 +15,84 @@ from geoRpro.sent2 import Sentinel2
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# * - Series of raster operations yielding a rasterio.DatasetReader
+
+# - utils for processing array and metadata
 
 
-class RArr:
+def mask_vals(arr, meta, vals):
     """
-    Array and metadata operation for geo-Rasters
+    Create a masked array (data, mask, fill_value) based on a list of values
+    and update metadata
 
-    Each method updates the instance attributes; self.arr and self meta.
+    data: Data array with masked value
+    mask: Boolean array with True: masked and False: not masked
 
-    Classmethods can be used as alterative constructors
+    *********
+    params:
+        vals -> a list of values that shold be masked
 
+    return:
+        tuple: masked array, metadata
     """
-    def __init__(self, arr, meta):
-            self.arr = arr
-            self.meta = meta
-
-    def write_array_as_raster(self, fpath):
-        """
-        Save a numpy array as geo-raster to disk
-        *********
-        params:
-            arr ->  3D numpy array to save as raster
-            meta -> metadata for the new raster
-            fname -> name of the file (without ext)
-        return:
-            fpath -> full path of the new raster
-        """
-        assert (self.meta['driver'] == 'GTiff'),\
-            "Please use GTiff driver to write to disk. \
-        Passed {} instead.".format(self.meta['driver'])
-
-        assert (self.arr.ndim == 3),\
-            "np_array must have ndim = 3. \
-        Passed np_array of dimension {} instead.".format(self.arr.ndim)
-
-        with rasterio.open(fpath, 'w', **self.meta) as dst:
-            dst.write(self.arr.astype(self.meta['dtype']))
-        return fpath
+    # update metadata
+    new_meta = meta.copy()
+    new_meta.update({
+        'driver': 'GTiff',
+        'nbits': 1})
+    # create a masked array
+    arr = np.ma.MaskedArray(arr, np.in1d(arr, vals))
+    return arr, new_meta
 
 
+def mask_cond(arr, meta, cond):
+    """
+    Create a masked array (data, mask, fill_value) based on a condition
+    and update metadata
 
-    def mask_vals(self, vals):
-        """
-        Create a masked array (data, mask, fill_value) based on a list of values
-        and update metadata
+    data: Data array with masked value
+    mask: Boolean array with True: masked and False: not masked
 
-        data: Data array with masked value
-        mask: Boolean array with True: masked and False: not masked
+    *********
+    params:
+        t_arr -> numpy arrays (bands, width, heigh)
+        cond -> masking condition
+        meta -> metadata associated with the target arrays
 
-        *********
-        params:
-            vals -> a list of values that shold be masked
-
-        return:
-            tuple: masked array, metadata
-        """
-        # update metadata
-        new_meta = self.meta.copy()
-        new_meta.update({
-            'driver': 'GTiff',
-            'nbits': 1})
-        # create a masked array
-        self.arr = np.ma.MaskedArray(self.arr, np.in1d(self.arr, vals))
-        self.meta = new_meta
-        return self
-
-
-    def mask_cond(self, cond):
-        """
-        Create a masked array (data, mask, fill_value) based on a condition
-        and update metadata
-
-        data: Data array with masked value
-        mask: Boolean array with True: masked and False: not masked
-
-        *********
-        params:
-            t_arr -> numpy arrays (bands, width, heigh)
-            cond -> masking condition
-            meta -> metadata associated with the target arrays
-
-        return:
-            tuple: masked array, metadata
-        """
-        # update metadata
-        new_meta = self.meta.copy()
-        new_meta.update({
-            'driver': 'GTiff',
-            'nbits': 1})
-        # create a masked array
-        self.arr = np.ma.masked_where(cond, self.arr)
-        self.meta = new_meta
-        return self
+    return:
+        tuple: masked array, metadata
+    """
+    # update metadata
+    new_meta = meta.copy()
+    new_meta.update({
+        'driver': 'GTiff',
+        'nbits': 1})
+    # create a masked array
+    arr = np.ma.masked_where(cond, arr)
+    return arr, new_meta
 
 
-    def apply_mask(self, mask_arr, fill_value=-9999):
-        """
-        Apply a mask array on a target array
+def apply_mask(arr, mask_arr, fill_value=999999):
+    """
+    Apply a mask array on a target array
 
-        *********
+    *********
 
-        params:
-            mask_arr -> numpy mask arr (binary or boolean)
-            fill_value -> value used to fill in the masked values
-        return:
-            tuple: masked filled array, metadata
-        """
-        # check arr and mask have the same dim
-        assert (self.arr.shape == mask_arr.shape),\
-            "Array and mask must have the same dimensions!"
-        # get masked array
-        masked_arr = np.ma.array(self.arr, mask=mask_arr)
+    params:
+        mask_arr -> numpy mask arr (binary or boolean)
+        fill_value -> value used to fill in the masked values
+    return:
+        tuple: masked filled array, metadata
+    """
+    # check arr and mask have the same dim
+    assert (arr.shape == mask_arr.shape),\
+        "Array and mask must have the same dimensions!"
+    # get masked array
+    masked_arr = np.ma.array(arr, mask=mask_arr)
 
-        # Fill masked vales with zero !! maybe to be changed
-        m_filled = np.ma.filled(masked_arr, fill_value=fill_value)
-        self.arr = m_filled
-        return self
+    # Fill masked vales with zero !! maybe to be changed
+    arr_filled = np.ma.filled(masked_arr, fill_value=fill_value)
+    return arr_filled
 
-
-    @classmethod
-    def load(cls, src, index=None, masked=False):
-        "load array in memory"
-
-        if index:
-            return RArr(src.read(index, masked=masked), src.meta)
-        return RArr(src.read(masked=masked), src.meta)
-
-
-
-    @classmethod
-    def load_ndvi(cls, src_red, src_nir):
-        """
-        Calc ndvi array
-        *********
-
-        params:
-            nir_arr -> 2D numpy arrays (width, heigh)
-            meta -> metadata associated with one of the two arrays
-
-        return:
-            tuple of new numpy arr and relative metadata
-        """
-        red = src_red.read(1)
-        nir = src_nir.read(1)
-        np.seterr(divide='ignore', invalid='ignore')
-        ndvi = (nir.astype(np.float32)-red.astype(np.float32))/ \
-                   (nir.astype(np.float32)+red.astype(np.float32))
-
-        # updata metadata
-        new_meta = src_red.meta.copy()
-        new_meta.update({
-            'driver': 'GTiff',
-            'dtype': 'float32',
-            'count': 1})
-        return RArr(np.expand_dims(ndvi, axis=0), new_meta)
-
-
-    @classmethod
-    def load_window(cls, src, window):
-        """
-        Return an area of interest (aoi)
-        *********
-
-        params:
-            window -> rasterio.windows.Window
-
-        return:
-            tuple: array, metadata
-        """
-        new_meta = src.meta.copy()
-        new_meta.update({
-            'driver': 'GTiff',
-            'height': window.height,
-            'width': window.width,
-            'transform': rasterio.windows.transform(window, src.transform)})
-        return RArr(src.read(window=window), new_meta)
-
-
-    @classmethod
-    def load_resample(cls, src, scale=2):
-        """
-        Change the cell size of an existing raster object.
-
-        Can be used for both:
-
-        Upsampling; converting to higher resolution/smaller cells
-        Downsampling converting to lower resolution/larger cells
-
-        a raster object.
-
-        Save the new raster directly to disk.
-
-        ************
-
-        params:
-            src -> rasterio.DatasetReader
-            scale -> scaling factor to change the cell size with.
-                     scale = 2 -> Upsampling e.g from 10m to 20m resolution
-                     scale = 0.5 -> Downsampling e.g from 20m to 10m resolution
-
-        yield:
-            src -> resampled rasterio.DatasetReader
-        """
-        t = src.transform
-
-        # rescale the metadata
-        transform = rasterio.Affine(t.a / scale, t.b, t.c, t.d, t.e / scale, t.f)
-        height = src.height * scale
-        width = src.width * scale
-
-        new_meta = copy.deepcopy(src.meta)
-        new_meta.update(transform=transform, driver='GTiff', height=height,
-                        width=width)
-
-        # resampling
-        arr = src.read(out_shape=(src.count, int(height), int(width),),
-                        resampling=rasterio.enums.Resampling.nearest)
-        return RArr(arr, new_meta)
 
 @contextmanager
 def to_src(arr, metadata):
@@ -249,12 +109,259 @@ def to_src(arr, metadata):
         with memfile.open() as data:  # Reopen as DatasetReader
           yield data
 
+
+def write_array_as_raster(arr, meta, fpath):
+    """
+    Save a numpy array as geo-raster to disk
+
+    params:
+    --------
+
+        arr :  nd numpy array
+               must be 3D array (bands, height, width)
+
+        meta : dict
+               metadata for the new raster
+
+        fname : string 
+               full path of the new raster file
+    
+    return:
+
+        full path of the new raster
+    
+    """
+    assert (meta['driver'] == 'GTiff'),\
+        "Please use GTiff driver to write to disk. \
+    Passed {} instead.".format(meta['driver'])
+
+    assert (arr.ndim == 3),\
+        "np_array must have ndim = 3. \
+    Passed np_array of dimension {} instead.".format(arr.ndim)
+
+    with rasterio.open(fpath, 'w', **meta) as dst:
+        for layer_idx in range(arr.shape[0]):
+            # follow gdal convention, start indexing from 1 -> layer_idx+1
+            dst.write_band(layer_idx+1, arr[layer_idx,:,:].astype(meta['dtype']))
+    return fpath
+
+
+# - utils for processing src: rasterio.DataSetReader
+
+
+def load(src, masked=False):
+    "load array in memory"
+    arr = src.read(masked=masked)
+    meta = src.metadata
+    return arr, meta
+
+
+def load_band(src, index, masked=False):
+    "load array in memory"
+    arr = src.read(index, masked=masked)
+    meta = src.metadata
+    return arr, meta
+
+
+def load_window(src, window, masked=False):
+    """
+    Return an area of interest (aoi)
+    *********
+
+    params:
+        window -> rasterio.windows.Window
+
+    return:
+        tuple: array, metadata
+    """
+    new_meta = src.meta.copy()
+    new_meta.update({
+        'driver': 'GTiff',
+        'height': window.height,
+        'width': window.width,
+        'transform': rasterio.windows.transform(window, src.transform)})
+    arr = src.read(window=window, masked=masked)
+    return arr, new_meta
+
+
+def load_resample(src, scale=2):
+    """
+    Change the cell size of an existing raster object.
+
+    Can be used for both:
+
+    Upsampling; converting to higher resolution/smaller cells
+    Downsampling converting to lower resolution/larger cells
+
+    a raster object.
+
+    Save the new raster directly to disk.
+
+    ************
+
+    params:
+        src -> rasterio.DatasetReader
+        scale -> scaling factor to change the cell size with.
+                 scale = 2 -> Upsampling e.g from 10m to 20m resolution
+                 scale = 0.5 -> Downsampling e.g from 20m to 10m resolution
+
+    yield:
+        src -> resampled rasterio.DatasetReader
+    """
+    t = src.transform
+
+    # rescale the metadata
+    transform = rasterio.Affine(t.a / scale, t.b, t.c, t.d, t.e / scale, t.f)
+    height = src.height * scale
+    width = src.width * scale
+
+    new_meta = copy.deepcopy(src.meta)
+    new_meta.update(transform=transform, driver='GTiff', height=height,
+                    width=width)
+
+    # resampling
+    arr = src.read(out_shape=(src.count, int(height), int(width),),
+                    resampling=rasterio.enums.Resampling.nearest)
+    return arr, new_meta
+
+
+def load_ndvi(cls, src_red, src_nir):
+    """
+    Calc ndvi array
+    *********
+
+    params:
+        nir_arr -> 2D numpy arrays (width, heigh)
+        meta -> metadata associated with one of the two arrays
+
+    return:
+        tuple of new numpy arr and relative metadata
+    """
+    red = src_red.read(1)
+    nir = src_nir.read(1)
+    np.seterr(divide='ignore', invalid='ignore')
+    ndvi = (nir.astype(np.float32)-red.astype(np.float32))/ \
+               (nir.astype(np.float32)+red.astype(np.float32))
+
+    # updata metadata
+    new_meta = src_red.meta.copy()
+    new_meta.update({
+        'driver': 'GTiff',
+        'dtype': 'float32',
+        'count': 1})
+    arr = np.expand_dims(ndvi, axis=0)
+    return arr, new_meta
+
+
 def write_raster(src, fpath):
     logger.debug(f"Writing to disk..")
     with rasterio.open(fpath, 'w', **src.meta) as dst:
         dst.write(src.read())
-    logger.debug(f"{fname} saved to disk")
+    logger.debug(f"{fpath} saved to disk")
     return fpath
+
+
+
+class Rstack:
+    """
+    Stack of geo rasters
+
+    Attributes
+    ----------
+
+    items: list of rasterio.DatasetReader objects
+    """
+    def __init__(self, items=None):
+
+        if items is None:
+            items = []
+        self.items = items
+        self.metadata_collect = None
+        self._gen_metadata()
+
+    def __check_for_crs(self):
+        """
+        Check for CRS consistency for the collection
+        """
+        if not all(r.crs.to_epsg() == self.items[0].crs.to_epsg()
+                   for r in self.items[1:]):
+            raise ValueError("CRS of all rasters should be the same")
+
+    def __check_for_dimensions(self):
+        """
+        Check for dimension consistency for the collection
+        """
+        if not all(r.width == self.items[0].width and r.height == self.items[0].height
+                   for r in self.items[1:]):
+            raise ValueError("height and width of all rasters should be the same")
+
+    def _gen_metadata(self):
+        """
+        Generate metadata for the collection
+        """
+        if self.items:
+            # copy metadata of the first item
+            self.metadata_collect = self.items[0].meta
+            self.__check_for_crs()
+            self.__check_for_dimensions()
+            self.metadata_collect.update(count=len(self.items))
+            self.metadata_collect.update(driver='GTiff')
+
+    def add_item(self, item):
+        """
+        Add a new item to the item collection and update metadata_collect
+
+        params:
+        ----------
+
+             item :  rasterio.DatasetReader
+        """
+        self.items.append(item)
+        self.metadata_collect.update(count=len(self.items))
+        if item.meta['dtype'] != self.metadata_collect['dtype']:
+            self.metadata_collect.update(dtype=item.meta['dtype'])
+
+    def gen_windows(self, approx_patch_size):
+        """
+        Yields patches of the entire stack as numpy array
+
+        params:
+        ----------
+
+             patch_size :  int
+                           size of the patch, e.g 500 pixels
+        """
+        v_split = self.items[0].height // approx_patch_size
+        h_split = self.items[0].width // approx_patch_size
+
+        # get patch arrays
+        v_arrays = np.array_split(np.arange(self.items[0].height), v_split)
+        h_arrays = np.array_split(np.arange(self.items[0].width), h_split)
+        new_meta = self.metadata_collect
+        for v_arr in v_arrays:
+            v_start = v_arr[0]
+            for h_arr in h_arrays:
+                h_start = h_arr[0]
+                yield Window(h_start, v_start, len(h_arr), len(v_arr))
+
+
+    def get_window(self, window):
+        new_meta = self.metadata_collect
+        new_meta.update({
+        'driver': 'GTiff',
+        'height': window.height,
+        'width': window.width,
+        'transform': rasterio.windows.transform(window, self.metadata_collect['transform'])})
+
+        arr = np.array([src.read(1, window=window) for src in self.items])
+        #if not mask.size == 0:
+        #    print("mask")
+        #    mask_win = mask[0][window.row_off: window.row_off+window.height,
+        #                    window.col_off:window.col_off+window.width]
+        #    masked_arr = np.ma.masked_array(*np.broadcast_arrays(arr, mask_win))
+        #    arr = np.ma.filled(masked_arr, fill_value=fill_value)
+        return arr, new_meta
+
 
 
 if __name__ == "__main__":
@@ -265,28 +372,13 @@ if __name__ == "__main__":
     import pdb
 
     INDIR = "/home/diego/work/dev/data"
-    s20 = Sentinel2(os.path.join(INDIR, "geoRpro_inp/S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R20m"))
-    s10 = Sentinel2(os.path.join(INDIR, "geoRpro_inp/S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R10m"))
-    fpath_scl = s20.get_fpaths('SCL_20m')[0]
-    fpath_nir = s10.get_fpaths('B08_10m')[0]
-    fpath_red = s10.get_fpaths('B04_10m')[0]
-
-    #s10 = Sentinel2(os.path.join(INDIR, "amazon/S2A_MSIL2A_20200729T142741_N0214_R053_T20MNC_20200729T165425.SAFE/GRANULE/L2A_T20MNC_A026648_20200729T142736/IMG_DATA/R10m"))
-    #fpath_tcl = s10.get_fpaths('TCI_10m')[0]
+    s10 = Sentinel2(os.path.join(INDIR, "amazon/S2B_MSIL2A_20200803T142739_N0214_R053_T20MPA_20200803T165642.SAFE/GRANULE/L2A_T20MPA_A017811_20200803T142734/IMG_DATA/R10m/"))
+    win = Window(0, 0, 1000, 1000)
 
     with ExitStack() as stack_files:
-        scl_src = stack_files.enter_context(rasterio.open(fpath_scl))
-        red_src = stack_files.enter_context(rasterio.open(fpath_red))
-        nir_src = stack_files.enter_context(rasterio.open(fpath_nir))
-        print(nir_src)
-        with ExitStack() as stack_action:
-            r_sc = RArr.load(scl_src)
-            print(r_sc.arr)
-            print(r_sc.meta)
-            src = stack_action.enter_context(to_src(r_sc.arr, r_sc.meta))
-            print(r.arr)
-            print(r.meta)
-            r.mask_vals([3,5])
-            print(r.arr)
-            print(r.meta)
-    print(nir_src)
+        rstack = Rstack([stack_files.enter_context(rasterio.open(fp)) 
+            for fp in s10.get_fpaths('B02_10m', 'B03_10m', 'B04_10m', 'B08_10m')])
+        arr, meta = rstack.get_window(win)
+        write_array_as_raster(arr, meta, os.path.join(s10.dirpath, "S2B_T20MPA_20200803_Subset.tif"))
+
+
