@@ -15,7 +15,6 @@ from geoRpro.sent2 import Sentinel2
 from geoRpro.raster import RArr
 from geoRpro.utils import NumpyEncoder, to_json, json_to_disk, load_json
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -88,7 +87,7 @@ class DataExtractor:
         pass
 
     @classmethod
-    def extract(cls, src, gdf, mask_value=0):
+    def extract(cls, src, gdf, mask_value=999999):
         """
         Extract the pixel values at point location from a raster src
 
@@ -137,9 +136,10 @@ class DataExtractor:
             out_image_reshaped = out_image.reshape(-1, src.count)
 
             # Do not include value if masked
-            if mask_value in out_image_reshaped:
+            if np.all(out_image_reshaped == mask_value):
                 continue
-            y = np.append(y,[gdf['id'][index]] * out_image_reshaped.shape[0])
+            pdb.set_trace()
+            y = np.append(y,[gdf['id'].iloc[index]] * out_image_reshaped.shape[0])
             X = np.vstack((X,out_image_reshaped))
 
         return DataExtractor(X, y, labels_map)
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     shape_dir = os.path.join(basedir,'shapes_22092020/final_datapoints_22092020')
     gdf = gpd.read_file(os.path.join(shape_dir, 'final_datapoints_22092020.shp'))
     img_dir = os.path.join(basedir, 'ESSChacoal_from291908_to202002/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA/R10m')
- 
+
     # pick a band
     s10 = Sentinel2(img_dir)
 
