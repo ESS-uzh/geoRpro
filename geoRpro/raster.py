@@ -110,6 +110,8 @@ def to_src(arr, metadata):
           yield data
 
 
+# - utils for writing array/raster to disk
+
 def write_array_as_raster(arr, meta, fpath):
     """
     Save a numpy array as geo-raster to disk
@@ -123,13 +125,11 @@ def write_array_as_raster(arr, meta, fpath):
         meta : dict
                metadata for the new raster
 
-        fname : string 
+        fname : string
                full path of the new raster file
-    
     return:
 
         full path of the new raster
-    
     """
     assert (meta['driver'] == 'GTiff'),\
         "Please use GTiff driver to write to disk. \
@@ -146,21 +146,51 @@ def write_array_as_raster(arr, meta, fpath):
     return fpath
 
 
+def write_raster(srcs, meta, fpath, mask=False):
+    """
+    Save a geo-raster to disk
+
+    params:
+    --------
+
+        srcs : list
+               collection of rasterio.DatasetReader objects
+
+        meta : dict
+               metadata af the final geo-raster
+
+        fname : string
+               full path of the new raster file
+
+        mask : bool (dafault=False)
+               if True, return a mask array
+    return:
+
+        full path of the new raster
+    """
+    with rasterio.open(fpath, 'w', **meta) as dst:
+        for _id, src in enumerate(srcs, start=1):
+            print(f"Writing to disk src with res: {src.res}")
+            arr = src.read(masked=mask)
+            dst.write_band(_id, arr[0, :, :].astype(meta['dtype']))
+    return fpath
+
+
 # - utils for processing src: rasterio.DataSetReader
 
 
 def load(src, masked=False):
     "load array in memory"
     arr = src.read(masked=masked)
-    meta = src.metadata
-    return arr, meta
+    metadata = src.profile
+    return arr, metadata
 
 
 def load_band(src, index, masked=False):
     "load array in memory"
     arr = src.read(index, masked=masked)
-    meta = src.metadata
-    return arr, meta
+    metadata = src.profile
+    return arr, metadata
 
 
 def load_window(src, window, masked=False):
@@ -174,14 +204,14 @@ def load_window(src, window, masked=False):
     return:
         tuple: array, metadata
     """
-    new_meta = src.meta.copy()
-    new_meta.update({
+    arr = src.read(window=window, masked=masked)
+    metadata = src.profile.copy()
+    metadata.update({
         'driver': 'GTiff',
         'height': window.height,
         'width': window.width,
         'transform': rasterio.windows.transform(window, src.transform)})
-    arr = src.read(window=window, masked=masked)
-    return arr, new_meta
+    return arr, metadata
 
 
 def load_resample(src, scale=2):
@@ -215,14 +245,14 @@ def load_resample(src, scale=2):
     height = src.height * scale
     width = src.width * scale
 
-    new_meta = copy.deepcopy(src.meta)
-    new_meta.update(transform=transform, driver='GTiff', height=height,
+    metadata = copy.deepcopy(src.profile)
+    metadata.update(transform=transform, driver='GTiff', height=height,
                     width=width)
 
     # resampling
     arr = src.read(out_shape=(src.count, int(height), int(width),),
                     resampling=rasterio.enums.Resampling.nearest)
-    return arr, new_meta
+    return arr, metadata
 
 
 def load_ndvi(cls, src_red, src_nir):
@@ -253,12 +283,6 @@ def load_ndvi(cls, src_red, src_nir):
     return arr, new_meta
 
 
-def write_raster(src, fpath):
-    logger.debug(f"Writing to disk..")
-    with rasterio.open(fpath, 'w', **src.meta) as dst:
-        dst.write(src.read())
-    logger.debug(f"{fpath} saved to disk")
-    return fpath
 
 
 
@@ -295,17 +319,27 @@ class Rstack:
                    for r in self.items[1:]):
             raise ValueError("height and width of all rasters should be the same")
 
+    def __check_for_resolution(self):
+        """
+        Check for dimension consistency for the collection
+        """
+        if not all(r.res == self.items[0].res for r in self.items[1:]):
+            raise ValueError("Cannot stack rasters with different spacial resolution")
+
     def _gen_metadata(self):
         """
         Generate metadata for the collection
         """
         if self.items:
             # copy metadata of the first item
-            self.metadata_collect = self.items[0].meta
+            self.metadata_collect = self.items[0].profile
             self.__check_for_crs()
             self.__check_for_dimensions()
             self.metadata_collect.update(count=len(self.items))
             self.metadata_collect.update(driver='GTiff')
+
+    def set_metadata_param(self, param, value):
+        self.metadata_collect[param] = value
 
     def add_item(self, item):
         """
@@ -317,9 +351,44 @@ class Rstack:
              item :  rasterio.DatasetReader
         """
         self.items.append(item)
+        if len(self.items) == 1:
+            self._gen_metadata()
+        else:
+            self.metadata_collect.update(count=len(self.items))
+            # ! check for other meta of the item
+            self.__check_for_resolution()
+            self.__check_for_crs()
+            self.__check_for_dimensions()
+            if item.meta['dtype'] != self.metadata_collect['dtype']:
+                self.metadata_collect.update(dtype=item.meta['dtype'])
+
+    def extend_items(self, items):
+        """
+        Extend the item collection and update metadata_collect
+
+        params:
+        ----------
+
+             item :  list
+                     list of rasterio.DatasetReader objects
+        """
+        # ! TO DO:
+        # ! check for meta of new items, e.g. dtype, dimensions, crs
+        self.items.extend(items)
         self.metadata_collect.update(count=len(self.items))
-        if item.meta['dtype'] != self.metadata_collect['dtype']:
-            self.metadata_collect.update(dtype=item.meta['dtype'])
+
+    def reorder_items(self, new_order):
+        """
+        Change the order of the items
+
+        params:
+        ----------
+
+             new_order :  list
+                          list of indexes defining the new order of the items
+                          e.g., [3, 2, 0, 1, 4]
+        """
+        self.items = [self.items[i] for i in new_order]
 
     def gen_windows(self, approx_patch_size):
         """
@@ -376,7 +445,7 @@ if __name__ == "__main__":
     win = Window(0, 0, 1000, 1000)
 
     with ExitStack() as stack_files:
-        rstack = Rstack([stack_files.enter_context(rasterio.open(fp)) 
+        rstack = Rstack([stack_files.enter_context(rasterio.open(fp))
             for fp in s10.get_fpaths('B02_10m', 'B03_10m', 'B04_10m', 'B08_10m')])
         arr, meta = rstack.get_window(win)
         write_array_as_raster(arr, meta, os.path.join(s10.dirpath, "S2B_T20MPA_20200803_Subset.tif"))
