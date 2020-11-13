@@ -46,19 +46,21 @@ def mask_vals(arr, meta, vals):
 
 def mask_cond(arr, meta, cond):
     """
-    Create a masked array (data, mask, fill_value) based on a condition
-    and update metadata
+    Return a masked array (data, mask, fill_value) where condition (cond) is True
 
-    data: Data array with masked value
-    mask: Boolean array with True: masked and False: not masked
 
-    *********
     params:
-        t_arr -> numpy arrays (bands, width, heigh)
-        cond -> masking condition
-        meta -> metadata associated with the target arrays
+    --------
 
+        arr :  nd numpy array
+
+        meta : dict
+               metadata for the new raster
+
+        cond : array-like
+               Masking condition; e.g. arr < 2 masks all array values less then 2
     return:
+
         tuple: masked array, metadata
     """
     # update metadata
@@ -71,7 +73,7 @@ def mask_cond(arr, meta, cond):
     return arr, new_meta
 
 
-def apply_mask(arr, mask_arr, fill_value=999999):
+def apply_mask(arr, mask_arr, fill_value=0):
     """
     Apply a mask array on a target array
 
@@ -214,6 +216,25 @@ def load_window(src, window, masked=False):
     return arr, metadata
 
 
+def gen_windows(src):
+    """
+    Yields all windos composing the entire raster
+
+    """
+    for ji, win in src.block_windows(1):
+        yield win
+
+
+def gen_blocks(src):
+    """
+    Yields all block-arrays composing the entire raster, each block has associated metadata
+
+    """
+    for ji, win in src.block_windows(1):
+        arr, meta = load_window(src, win)
+        yield arr, meta
+
+
 def load_resample(src, scale=2):
     """
     Change the cell size of an existing raster object.
@@ -255,34 +276,31 @@ def load_resample(src, scale=2):
     return arr, metadata
 
 
-def load_ndvi(cls, src_red, src_nir):
+def load_ndvi(red, nir):
     """
     Calc ndvi array
     *********
 
     params:
-        nir_arr -> 2D numpy arrays (width, heigh)
+        red -> 2D numpy arrays (width, heigh)
+        nir -> 2D numpy arrays (width, heigh)
         meta -> metadata associated with one of the two arrays
 
     return:
         tuple of new numpy arr and relative metadata
     """
-    red = src_red.read(1)
-    nir = src_nir.read(1)
     np.seterr(divide='ignore', invalid='ignore')
     ndvi = (nir.astype(np.float32)-red.astype(np.float32))/ \
                (nir.astype(np.float32)+red.astype(np.float32))
 
     # updata metadata
-    new_meta = src_red.meta.copy()
-    new_meta.update({
-        'driver': 'GTiff',
-        'dtype': 'float32',
-        'count': 1})
+    #new_meta = src_red.meta.copy()
+    #new_meta.update({
+    #    'driver': 'GTiff',
+    #    'dtype': 'float32',
+    #    'count': 1})
     arr = np.expand_dims(ndvi, axis=0)
-    return arr, new_meta
-
-
+    return arr
 
 
 
