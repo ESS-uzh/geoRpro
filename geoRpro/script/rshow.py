@@ -1,14 +1,15 @@
 import os
 import rasterio
+from rasterio.windows import Window
 from matplotlib import pyplot
 
-INDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_inp/planet"
-OUTDIR = "/home/diego/work/dev/ess_diego/github/goeRpro_out"
-OUTDIR_m = "/home/diego/work/dev/ess_diego/github/goeRpro_out/test_masking"
+INDIR = "/home/diego/work/dev/data/planet_data/imgs_lcc_charcoal_overlap"
+
+win = Window(0, 0, 6000, 6000)
 
 def show_ndvi(fname, n):
     with rasterio.open(fname) as src:
-        arr = src.read(1)
+        arr = src.read(1, window=win)
         print(type(arr))
         print(arr.shape)
         pyplot.figure(n)
@@ -29,23 +30,8 @@ def show_hist(arr):
     return axs.hist(arr.flatten(), bins=50)
 
 
-ndvii = os.path.join(OUTDIR, "ndvi_aoi.tiff")
-ndvi = os.path.join(OUTDIR_m, "ndvi_mask_aoi.tiff")
-ndvi_m = os.path.join(OUTDIR_m, "ndvi_masked_aoi.tiff")
-masked_b02 = os.path.join(OUTDIR, "T37MBN_20190628T073621_B02_masked_aoi.tiff") 
-scl_mask = os.path.join(OUTDIR, "T37MBN_20190628T073621_SCL_mask_aoi.tiff") 
+ndvi = os.path.join(INDIR, "20200716_104044_ssc11_u0001_analytic_ndvi.tif")
 
-show_ndvi(ndvii, 1)
-show_ndvi(ndvi, 2)
-show_ndvi(ndvi_m, 3)
-show_img(masked_b02, 4, 100, 2500)
-show_img(scl_mask, 5, 0, 1)
-
-with rasterio.open(masked_b02) as src:
-        b02 = src.read(1)
-#with rasterio.open(masked_ndvi) as src1:
-#        ndvi_arr_m = src1.read(1)
-#show_hist(b02)
-#show_hist(ndvi_arr_m)
+show_ndvi(ndvi, 1)
 
 pyplot.show()
