@@ -8,9 +8,6 @@ import numpy as np
 import rasterio
 from rasterio.mask import mask
 from rasterio.windows import Window
-import shapely
-
-from geoRpro.sent2 import Sentinel2
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -21,15 +18,21 @@ logger.setLevel(logging.DEBUG)
 
 def mask_vals(arr, meta, vals):
     """
-    Create a masked array (data, mask, fill_value) based on a list of values
-    and update metadata
+    Create a masked array (data, mask) and metadata based on a list of values
 
-    data: Data array with masked value
-    mask: Boolean array with True: masked and False: not masked
+    (data) masked values where the condition (cond) is True
+    (mask) boolean mask, TRUE for masked values FALSE everywhere else 
 
-    *********
     params:
-        vals -> a list of values that shold be masked
+    --------
+
+        arr :  nd numpy array
+
+        meta : dict
+               metadata for the new raster
+
+        vals : list
+               values that should be masked
 
     return:
         tuple: masked array, metadata
@@ -46,8 +49,10 @@ def mask_vals(arr, meta, vals):
 
 def mask_cond(arr, meta, cond):
     """
-    Return a masked array (data, mask, fill_value) where condition (cond) is True
+    Create a masked array (data, mask) and metadata based on condition
 
+    (data) masked values where the condition (cond) is True
+    (mask) boolean mask, TRUE for masked values FALSE everywhere else 
 
     params:
     --------
@@ -58,7 +63,8 @@ def mask_cond(arr, meta, cond):
                metadata for the new raster
 
         cond : array-like
-               Masking condition; e.g. arr < 2 masks all array values less then 2
+               masking condition; e.g. masks values greater then 2
+               example: mask_arr, meta_bin = rst.mask_cond(arr, meta, arr > 2)
     return:
 
         tuple: masked array, metadata
@@ -73,25 +79,33 @@ def mask_cond(arr, meta, cond):
     return arr, new_meta
 
 
-def apply_mask(arr, mask_arr, fill_value=0):
+def apply_mask(arr, mask, fill_value=0):
     """
-    Apply a mask array on a target array
+    Apply a mask to a target array and replace masked values with a
+    fill_value
 
-    *********
 
     params:
-        mask_arr -> numpy mask arr (binary or boolean)
-        fill_value -> value used to fill in the masked values
-    return:
-        tuple: masked filled array, metadata
-    """
-    # check arr and mask have the same dim
-    assert (arr.shape == mask_arr.shape),\
-        "Array and mask must have the same dimensions!"
-    # get masked array
-    masked_arr = np.ma.array(arr, mask=mask_arr)
+    --------
 
-    # Fill masked vales with zero !! maybe to be changed
+        mask : numpy boolean mask arr
+               e.g. mask_arr.mask
+        
+        fill_value : int
+                     value used to fill in the masked values
+
+    return:
+           numpy array with values equal to fill_value where mask_arr 
+           is equal to 1
+    """
+    # check arr and mask_arr have the same dimensions
+    assert (arr.shape == mask.shape),\
+        "Array and mask must have the same dimensions!"
+
+    # get masked array
+    masked_arr = np.ma.array(arr, mask=mask)
+
+    # Fill masked vales with fill_value
     arr_filled = np.ma.filled(masked_arr, fill_value=fill_value)
     return arr_filled
 
@@ -144,7 +158,7 @@ def write_array_as_raster(arr, meta, fpath):
     with rasterio.open(fpath, 'w', **meta) as dst:
         for layer_idx in range(arr.shape[0]):
             # follow gdal convention, start indexing from 1 -> layer_idx+1
-            dst.write_band(layer_idx+1, arr[layer_idx,:,:].astype(meta['dtype']))
+            dst.write_band(layer_idx+1, arr[layer_idx, :, :].astype(meta['dtype']))
     return fpath
 
 
@@ -182,32 +196,78 @@ def write_raster(srcs, meta, fpath, mask=False):
 
 
 def load(src, masked=False):
-    "load array in memory"
+    """
+    Load a raster array
+
+    *********
+
+    params:
+    --------
+
+        src : rasterio.DatasetReader object
+
+        masked : bool (default=False)
+                 if True exclude nodata values
+
+
+    return:
+        tuple: array, metadata
+  """
     arr = src.read(masked=masked)
     metadata = src.profile
     return arr, metadata
 
 
-def load_band(src, index, masked=False):
-    "load array in memory"
-    arr = src.read(index, masked=masked)
+def load_bands(src, indexes, masked=False):
+    """
+    Load selected bands of a raster as array
+
+    *********
+
+    params:
+    --------
+
+        src : rasterio.DatasetReader object
+
+        indexes : list
+                  list of bands to load, e.g. [1,2,3]
+
+        masked : bool (default=False)
+                 if True exclude nodata values
+
+
+    return:
+        tuple: array, metadata
+    """
+    arr = src.read(indexes, masked=masked)
     metadata = src.profile
+    metadata.update({
+        'driver': 'GTiff',
+        'count': len(indexes)})
     return arr, metadata
 
 
 def load_window(src, window, masked=False):
     """
-    Return an area of interest (aoi)
+    Load a raster array from a window
+
     *********
 
     params:
-        window -> rasterio.windows.Window
+    --------
+
+        src : rasterio.DatasetReader object
+
+        window : rasterio.windows.Window
+
+        masked : bool (default=False)
+                 if True exclude nodata values
 
     return:
         tuple: array, metadata
-    """
+  """
     arr = src.read(window=window, masked=masked)
-    metadata = src.profile.copy()
+    metadata = src.profile
     metadata.update({
         'driver': 'GTiff',
         'height': window.height,
@@ -216,12 +276,41 @@ def load_window(src, window, masked=False):
     return arr, metadata
 
 
+def load_raster_from_poly(src, geom, crop=True):
+    """
+    Load a raster array from an input shape
+
+    params:
+    --------
+
+        src : rasterio.DatasetReader object
+
+        geom : GEOJson-like dict
+               input shape, e.g. { 'type': 'Polygon', 'coordinates': [[(),(),(),()]] }
+
+        crop : bool (dafault=True)
+               Whether to crop the raster to the extent of the shapes
+
+    return:
+
+        tuple: array, metadata
+    """
+    arr, out_transform = rasterio.mask.mask(src, [geom], crop=crop)
+    metadata = src.profile
+    metadata.update({
+        "driver": "GTiff",
+        "height": arr.shape[1],
+        "width": arr.shape[2],
+        "transform": out_transform})
+    return arr, metadata
+
+
 def gen_windows(src):
     """
-    Yields all windos composing the entire raster
+    Yields all windows composing the entire raster
 
     """
-    for ji, win in src.block_windows(1):
+    for _, win in src.block_windows(1):
         yield win
 
 
@@ -230,7 +319,7 @@ def gen_blocks(src):
     Yields all block-arrays composing the entire raster, each block has associated metadata
 
     """
-    for ji, win in src.block_windows(1):
+    for _, win in src.block_windows(1):
         arr, meta = load_window(src, win)
         yield arr, meta
 
@@ -246,18 +335,19 @@ def load_resample(src, scale=2):
 
     a raster object.
 
-    Save the new raster directly to disk.
-
-    ************
-
     params:
-        src -> rasterio.DatasetReader
-        scale -> scaling factor to change the cell size with.
+    --------
+
+        src : rasterio.DatasetReader object
+
+        scale : int (default=2)
+                 scaling factor to change the cell size with.
                  scale = 2 -> Upsampling e.g from 10m to 20m resolution
                  scale = 0.5 -> Downsampling e.g from 20m to 10m resolution
 
-    yield:
-        src -> resampled rasterio.DatasetReader
+    return:
+
+        tuple: array, metadata
     """
     t = src.transform
 
@@ -272,7 +362,7 @@ def load_resample(src, scale=2):
 
     # resampling
     arr = src.read(out_shape=(src.count, int(height), int(width),),
-                    resampling=rasterio.enums.Resampling.nearest)
+                   resampling=rasterio.enums.Resampling.nearest)
     return arr, metadata
 
 
@@ -306,12 +396,15 @@ def load_ndvi(red, nir):
 
 class Rstack:
     """
-    Stack of geo rasters
+    Create a stack of geo-rasters
+
+    Raster should have the same crs, dimentions and spacial resolution
 
     Attributes
     ----------
 
-    items: list of rasterio.DatasetReader objects
+      items: list
+             collection of rasterio.DatasetReader objects
     """
     def __init__(self, items=None):
 
@@ -321,6 +414,7 @@ class Rstack:
         self.metadata_collect = None
         self._gen_metadata()
 
+
     def __check_for_crs(self):
         """
         Check for CRS consistency for the collection
@@ -328,6 +422,7 @@ class Rstack:
         if not all(r.crs.to_epsg() == self.items[0].crs.to_epsg()
                    for r in self.items[1:]):
             raise ValueError("CRS of all rasters should be the same")
+
 
     def __check_for_dimensions(self):
         """
@@ -337,12 +432,14 @@ class Rstack:
                    for r in self.items[1:]):
             raise ValueError("height and width of all rasters should be the same")
 
+
     def __check_for_resolution(self):
         """
         Check for dimension consistency for the collection
         """
         if not all(r.res == self.items[0].res for r in self.items[1:]):
             raise ValueError("Cannot stack rasters with different spacial resolution")
+
 
     def _gen_metadata(self):
         """
@@ -356,8 +453,10 @@ class Rstack:
             self.metadata_collect.update(count=len(self.items))
             self.metadata_collect.update(driver='GTiff')
 
+
     def set_metadata_param(self, param, value):
         self.metadata_collect[param] = value
+
 
     def add_item(self, item):
         """
@@ -380,6 +479,7 @@ class Rstack:
             if item.meta['dtype'] != self.metadata_collect['dtype']:
                 self.metadata_collect.update(dtype=item.meta['dtype'])
 
+
     def extend_items(self, items):
         """
         Extend the item collection and update metadata_collect
@@ -395,6 +495,7 @@ class Rstack:
         self.items.extend(items)
         self.metadata_collect.update(count=len(self.items))
 
+
     def reorder_items(self, new_order):
         """
         Change the order of the items
@@ -407,6 +508,7 @@ class Rstack:
                           e.g., [3, 2, 0, 1, 4]
         """
         self.items = [self.items[i] for i in new_order]
+
 
     def gen_windows(self, approx_patch_size):
         """
@@ -424,7 +526,6 @@ class Rstack:
         # get patch arrays
         v_arrays = np.array_split(np.arange(self.items[0].height), v_split)
         h_arrays = np.array_split(np.arange(self.items[0].width), h_split)
-        new_meta = self.metadata_collect
         for v_arr in v_arrays:
             v_start = v_arr[0]
             for h_arr in h_arrays:
@@ -448,24 +549,3 @@ class Rstack:
         #    masked_arr = np.ma.masked_array(*np.broadcast_arrays(arr, mask_win))
         #    arr = np.ma.filled(masked_arr, fill_value=fill_value)
         return arr, new_meta
-
-
-
-if __name__ == "__main__":
-
-
-    from rasterio.windows import Window
-    from contextlib import ExitStack
-    import pdb
-
-    INDIR = "/home/diego/work/dev/data"
-    s10 = Sentinel2(os.path.join(INDIR, "amazon/S2B_MSIL2A_20200803T142739_N0214_R053_T20MPA_20200803T165642.SAFE/GRANULE/L2A_T20MPA_A017811_20200803T142734/IMG_DATA/R10m/"))
-    win = Window(0, 0, 1000, 1000)
-
-    with ExitStack() as stack_files:
-        rstack = Rstack([stack_files.enter_context(rasterio.open(fp))
-            for fp in s10.get_fpaths('B02_10m', 'B03_10m', 'B04_10m', 'B08_10m')])
-        arr, meta = rstack.get_window(win)
-        write_array_as_raster(arr, meta, os.path.join(s10.dirpath, "S2B_T20MPA_20200803_Subset.tif"))
-
-

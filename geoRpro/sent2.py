@@ -70,25 +70,3 @@ class Sentinel2:
 
     def _verify_for_rfiles_match(self):
         assert bool(self._lookup) == True, "No file matching found at {}".format(self.dirpath)
-
-
-if __name__ == '__main__':
-
-    INDIR = "/home/diego/work/dev/data"
-
-    s10 = Sentinel2(os.path.join(INDIR, "amazon/S2A_MSIL2A_20200729T142741_N0214_R053_T20MNC_20200729T165425.SAFE/GRANULE/L2A_T20MNC_A026648_20200729T142736/IMG_DATA/R10m"))
-    fpath_tcl = s10.get_fpaths('TCL_10m')[0]
-
-
-
-    #basedir = '/home/diego/work/dev/ess_diego/github/goeRpro_inp'
-
-    ## Work with 20m resolution
-    #imgdir = os.path.join(basedir,'S2A_MSIL2A_20190628T073621_N9999_R092_T37MBN_20191121T145522.SAFE/GRANULE/L2A_T37MBN_A020967_20190628T075427/IMG_DATA/R20m')
-    ## some testing
-    #p = Sentinel2(imgdir)
-    #print(p.get_all_bands())
-    #print(p.get_fpaths('B02_20m','B02'))
-    #print(p.get_datetake('B02_20m'))
-    #print(p.get_tile_number('B02_20m'))
-
