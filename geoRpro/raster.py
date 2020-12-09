@@ -9,8 +9,10 @@ import rasterio
 from rasterio.mask import mask
 from rasterio.windows import Window
 
+import pdb
+
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 # - utils for processing array and metadata
@@ -21,7 +23,7 @@ def mask_vals(arr, meta, vals):
     Create a masked array (data, mask) and metadata based on a list of values
 
     (data) masked values where the condition (cond) is True
-    (mask) boolean mask, TRUE for masked values FALSE everywhere else 
+    (mask) boolean mask, TRUE for masked values FALSE everywhere else
 
     params:
     --------
@@ -52,7 +54,7 @@ def mask_cond(arr, meta, cond):
     Create a masked array (data, mask) and metadata based on condition
 
     (data) masked values where the condition (cond) is True
-    (mask) boolean mask, TRUE for masked values FALSE everywhere else 
+    (mask) boolean mask, TRUE for masked values FALSE everywhere else
 
     params:
     --------
@@ -90,12 +92,12 @@ def apply_mask(arr, mask, fill_value=0):
 
         mask : numpy boolean mask arr
                e.g. mask_arr.mask
-        
+
         fill_value : int
                      value used to fill in the masked values
 
     return:
-           numpy array with values equal to fill_value where mask_arr 
+           numpy array with values equal to fill_value where mask_arr
            is equal to 1
     """
     # check arr and mask_arr have the same dimensions
@@ -305,25 +307,6 @@ def load_raster_from_poly(src, geom, crop=True):
     return arr, metadata
 
 
-def gen_windows(src):
-    """
-    Yields all windows composing the entire raster
-
-    """
-    for _, win in src.block_windows(1):
-        yield win
-
-
-def gen_blocks(src):
-    """
-    Yields all block-arrays composing the entire raster, each block has associated metadata
-
-    """
-    for _, win in src.block_windows(1):
-        arr, meta = load_window(src, win)
-        yield arr, meta
-
-
 def load_resample(src, scale=2):
     """
     Change the cell size of an existing raster object.
@@ -366,39 +349,107 @@ def load_resample(src, scale=2):
     return arr, metadata
 
 
-def load_ndvi(red, nir):
+def gen_windows(src):
     """
-    Calc ndvi array
-    *********
+    Yields all windows composing the entire raster
 
-    params:
-        red -> 2D numpy arrays (width, heigh)
-        nir -> 2D numpy arrays (width, heigh)
-        meta -> metadata associated with one of the two arrays
-
-    return:
-        tuple of new numpy arr and relative metadata
     """
-    np.seterr(divide='ignore', invalid='ignore')
-    ndvi = (nir.astype(np.float32)-red.astype(np.float32))/ \
-               (nir.astype(np.float32)+red.astype(np.float32))
+    for _, win in src.block_windows(1):
+        yield win
 
-    # updata metadata
-    #new_meta = src_red.meta.copy()
-    #new_meta.update({
-    #    'driver': 'GTiff',
-    #    'dtype': 'float32',
-    #    'count': 1})
-    arr = np.expand_dims(ndvi, axis=0)
-    return arr
 
+def gen_blocks(src):
+    """
+    Yields all block-arrays composing the entire raster, each block has associated metadata
+
+    """
+    for _, win in src.block_windows(1):
+        arr, meta = load_window(src, win)
+        yield arr, meta
+
+
+
+
+class Indexes:
+    """
+    Provide methods to calculate different raster indexes
+    """
+
+    def __init__(self, scale_factor=1000):
+
+        self.scale_factor = scale_factor
+
+    def _scale_and_round(self, arr, meta):
+        float_array = arr * self.scale_factor
+        int_array = float_array.astype(int)
+        meta.update({
+            'driver': 'GTiff',
+            'count': 1})
+        return int_array, meta
+
+
+    def calc_ndvi(self, red_src, nir_src):
+        # to do: check for rasters to be (1, width, height)
+        redB = red_src.read()
+        nirB = nir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        ndvi = (nirB.astype(np.float32)-redB.astype(np.float32))/ \
+                   (nirB.astype(np.float32)+redB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(ndvi)
+        ndvi[where_are_NaNs] = 0
+
+        new_meta = nir_src.profile.copy()
+        return self._scale_and_round(ndvi, new_meta)
+
+    def calc_nbr(self, nir_src, swir_src):
+        """ Normalized Burn Ratio """
+        nirB = nir_src.read()
+        swirB = swir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        nbr = (nirB.astype(np.float32)-swirB.astype(np.float32))/ \
+                   (nirB.astype(np.float32)+swirB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(nbr)
+        nbr[where_are_NaNs] = 0
+        new_meta = nir_src.profile.copy()
+        return self._scale_and_round(nbr, new_meta)
+
+    def calc_bsi(self, blue_src, red_src, nir_src, swir_src):
+        """ Bare Soil Index (BSI) """
+        blueB = blue_src.read()
+        redB = red_src.read()
+        nirB = nir_src.read()
+        swirB = swir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        bsi = ((swirB.astype(np.float32)+redB.astype(np.float32))-(nirB.astype(np.float32)+blueB.astype(np.float32))) / \
+            ((swirB.astype(np.float32)+redB.astype(np.float32))+(nirB.astype(np.float32)+blueB.astype(np.float32)))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(bsi)
+        bsi[where_are_NaNs] = 0
+        new_meta = nir_src.profile.copy()
+        return self._scale_and_round(bsi, new_meta)
+
+    def calc_ndwi(self, green_src, nir_src):
+        """ Normalized Difference Water Index (NDWI)  """
+        greenB = green_src.read()
+        nirB = nir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        ndwi = (greenB.astype(np.float32)-nirB.astype(np.float32))/ \
+                   (greenB.astype(np.float32)+nirB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(ndwi)
+        ndwi[where_are_NaNs] = 0
+        new_meta = nir_src.profile.copy()
+        return self._scale_and_round(ndwi, new_meta)
 
 
 class Rstack:
     """
-    Create a stack of geo-rasters
+    Create a stack of geo-rasters and metadata associate with it
 
-    Raster should have the same crs, dimentions and spacial resolution
+    Rasters added to this class must have the same crs, dimension
+    and spacial resolution
 
     Attributes
     ----------
@@ -510,30 +561,21 @@ class Rstack:
         self.items = [self.items[i] for i in new_order]
 
 
-    def gen_windows(self, approx_patch_size):
+    def get_window(self, window, masked=False):
         """
-        Yields patches of the entire stack as numpy array
+        Load a window of the rstack instance
 
         params:
         ----------
 
-             patch_size :  int
-                           size of the patch, e.g 500 pixels
+        window : rasterio.windows.Window
+
+        masked : bool (default=False)
+                 if True exclude nodata values
+
+        return:
+            tuple: array, metadata
         """
-        v_split = self.items[0].height // approx_patch_size
-        h_split = self.items[0].width // approx_patch_size
-
-        # get patch arrays
-        v_arrays = np.array_split(np.arange(self.items[0].height), v_split)
-        h_arrays = np.array_split(np.arange(self.items[0].width), h_split)
-        for v_arr in v_arrays:
-            v_start = v_arr[0]
-            for h_arr in h_arrays:
-                h_start = h_arr[0]
-                yield Window(h_start, v_start, len(h_arr), len(v_arr))
-
-
-    def get_window(self, window):
         new_meta = self.metadata_collect
         new_meta.update({
         'driver': 'GTiff',
@@ -541,11 +583,5 @@ class Rstack:
         'width': window.width,
         'transform': rasterio.windows.transform(window, self.metadata_collect['transform'])})
 
-        arr = np.array([src.read(1, window=window) for src in self.items])
-        #if not mask.size == 0:
-        #    print("mask")
-        #    mask_win = mask[0][window.row_off: window.row_off+window.height,
-        #                    window.col_off:window.col_off+window.width]
-        #    masked_arr = np.ma.masked_array(*np.broadcast_arrays(arr, mask_win))
-        #    arr = np.ma.filled(masked_arr, fill_value=fill_value)
+        arr = np.array([src.read(1, window=window, masked=masked) for src in self.items])
         return arr, new_meta
