@@ -12,7 +12,6 @@ import geopandas as gpd
 import pandas as pd
 
 from geoRpro.sent2 import Sentinel2
-from geoRpro.raster import RArr
 from geoRpro.utils import NumpyEncoder, to_json, json_to_disk, load_json
 
 logger = logging.getLogger(__name__)
@@ -33,6 +32,7 @@ class DataExtractor:
     def save(self, fpath):
         json_arr = to_json({'X':self.X, 'y':self.y, 'labels_map':self.labels_map},
                            encoder=NumpyEncoder)
+        logger.debug(f"Saving training data to disk")
         json_to_disk(json_arr, fpath)
 
 
@@ -44,9 +44,8 @@ class DataExtractor:
         label_id
         """
 
-        logger.debug('''Current Labels ids: {}
-                     Sample numbers: {} '''.format(self.label_ids, self.label_ids_count))
-        logger.debug('Adding a new class to the training data ...')
+        logger.debug(f"Current labels ids: {self.label_ids} Sample numbers: {self.label_ids_count}")
+        logger.debug(f"Adding a new class: {label_name} with value {value} to the training data ...")
 
         # set number of samples equal to the highest number of existing samples
         samples_len = np.max(self.label_ids_count)
@@ -63,7 +62,36 @@ class DataExtractor:
         self.y = np.append(self.y, ids)
         self.label_ids = np.append(self.label_ids, label_id)
         self.label_ids_count = np.append(self.label_ids_count, samples_len)
-        self.labels_map[str(label_id)] = label_name
+        self.labels_map[label_name] = str(label_id)
+        logger.debug(f"New labels ids: {self.label_ids} Sample numbers: {self.label_ids_count}")
+
+    def remove_class(self, label_name):
+        """
+        Extend X,y in the 0 dimension by adding a number of
+        values to X and a numbers of label_id to y.
+        map_cl_id is updated with a new mapping: label_name,
+        label_id
+        """
+
+        logger.debug(f"Current Labels ids: {self.label_ids} Sample numbers: {self.label_ids_count}")
+        logger.debug(f"Removing the class: {label_name} from the training data ...")
+        # get label_id corresponding to label_name
+        label_id = self.labels_map[label_name]
+
+        # get row indexes for the class to be removed
+        idxs = np.where(self.y == int(label_id))
+
+        # remove class (from X and y)
+        self.X = np.delete(self.X, idxs, axis=0)
+        self.y = np.delete(self.y, idxs, axis=0)
+
+        # update instance attributes
+        idx = np.where(self.label_ids == int(label_id))
+        self.label_ids = np.delete(self.label_ids, idx)
+        self.label_ids_count = np.delete(self.label_ids_count, idx)
+        del self.labels_map[label_name]
+        logger.debug(f"New labels ids: {self.label_ids} Sample numbers: {self.label_ids_count}")
+
 
     def to_df(self, X, y):
         df = pd.DataFrame(data=self.X,
@@ -87,7 +115,7 @@ class DataExtractor:
         pass
 
     @classmethod
-    def extract(cls, src, gdf, mask_value=999999):
+    def extract(cls, src, gdf, mask_value=0):
         """
         Extract the pixel values at point location from a raster src
 
@@ -122,49 +150,35 @@ class DataExtractor:
 
         # build classname: id mapping
         label_names = np.unique(gdf.classname)
-        labels_map = {str(gdf.loc[gdf['classname'] == label_name, 'id'].iloc[0]): label_name for label_name in label_names}
+        #labels_map = {str(gdf.loc[gdf['classname'] == label_name, 'id'].iloc[0]): label_name for label_name in label_names}
+        labels_map = {label_name: str(gdf.loc[gdf['classname'] == label_name, 'id'].iloc[0])
+                for label_name in label_names}
 
         for index, geom in enumerate(geoms):
+            #print(f"Start {index}: {geom}")
 
             # Transform to GeoJSON format
             feature = [mapping(geom)]
 
-            # out_image.shape == (band_count,1,1) for one Point Object
-            out_image, out_transform = mask(src, feature, crop=True)
+            try:
+                # out_image.shape == (band_count,1,1) for one Point Object
+                out_image, out_transform = mask(src, feature, crop=True)
+            except ValueError:
+                print(f"Cannot extract point: {geom}, classname: {gdf['classname'].iloc[index]} . Try the next one ..")
+                continue
 
             # reshape the array to [pixel values, band_count]
             out_image_reshaped = out_image.reshape(-1, src.count)
+            #print(f"Extracted values {out_image_reshaped}")
 
             # Do not include value if masked
             if np.all(out_image_reshaped == mask_value):
+                #print(f"To mask {index}: {geom}")
                 continue
-            pdb.set_trace()
+
+
             y = np.append(y,[gdf['id'].iloc[index]] * out_image_reshaped.shape[0])
+            #print(f"Append {index}: label: {gdf['id'].iloc[index]}")
             X = np.vstack((X,out_image_reshaped))
 
         return DataExtractor(X, y, labels_map)
-
-
-
-
-if __name__ == "__main__":
-
-
-    from rasterio.windows import Window
-    from contextlib import ExitStack
-
-    basedir = '/home/diego/work/dev/data/Hanneke'
-
-    shape_dir = os.path.join(basedir,'shapes_22092020/final_datapoints_22092020')
-    gdf = gpd.read_file(os.path.join(shape_dir, 'final_datapoints_22092020.shp'))
-    img_dir = os.path.join(basedir, 'ESSChacoal_from291908_to202002/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA/R10m')
-
-    # pick a band
-    s10 = Sentinel2(img_dir)
-
-    with rasterio.open(s10.get_fpaths('B02_10m')[0]) as src:
-        r = RArr.load(src)
-        data = DataExtractor.extract(src, gdf)
-        print(data.X.shape)
-        print(data.y.shape)
-        print(data.labels_map)
