@@ -93,7 +93,7 @@ def apply_mask(arr, mask, fill_value=0):
         mask : numpy boolean mask arr
                e.g. mask_arr.mask
 
-        fill_value : int
+        fill_value : int (default:0)
                      value used to fill in the masked values
 
     return:
@@ -180,7 +180,7 @@ def write_raster(srcs, meta, fpath, mask=False):
         fname : string
                full path of the new raster file
 
-        mask : bool (dafault=False)
+        mask : bool (dafault:False)
                if True, return a mask array
     return:
 
@@ -234,7 +234,7 @@ def load_bands(src, indexes, masked=False):
         indexes : list
                   list of bands to load, e.g. [1,2,3]
 
-        masked : bool (default=False)
+        masked : bool (default:False)
                  if True exclude nodata values
 
 
@@ -262,7 +262,7 @@ def load_window(src, window, masked=False):
 
         window : rasterio.windows.Window
 
-        masked : bool (default=False)
+        masked : bool (default:False)
                  if True exclude nodata values
 
     return:
@@ -290,7 +290,7 @@ def load_raster_from_poly(src, geom, crop=True):
         geom : GEOJson-like dict
                input shape, e.g. { 'type': 'Polygon', 'coordinates': [[(),(),(),()]] }
 
-        crop : bool (dafault=True)
+        crop : bool (dafault:True)
                Whether to crop the raster to the extent of the shapes
 
     return:
@@ -323,7 +323,7 @@ def load_resample(src, scale=2):
 
         src : rasterio.DatasetReader object
 
-        scale : int (default=2)
+        scale : int (default:2)
                  scaling factor to change the cell size with.
                  scale = 2 -> Upsampling e.g from 10m to 20m resolution
                  scale = 0.5 -> Downsampling e.g from 20m to 10m resolution
@@ -369,23 +369,54 @@ def gen_blocks(src):
 
 
 
-
 class Indexes:
     """
     Provide methods to calculate different raster indexes
+
+    Attributes
+    ----------
+
+     metadata: dict
+                profile information associated with one of the raster
+                used to calculate the indexes
+
+     scale_factor: int (default:1000)
+               Calculated indexes array are scaled for one of those facors:
+               1 -> Return a float array
+               1000 -> Return an int array
     """
 
-    def __init__(self, scale_factor=1000):
+    def __init__(self, metadata, scale_factor=1000):
 
+        self.metadata = metadata
         self.scale_factor = scale_factor
 
-    def _scale_and_round(self, arr, meta):
-        float_array = arr * self.scale_factor
-        int_array = float_array.astype(int)
-        meta.update({
+    @property
+    def scale_factor(self):
+        return self._scale_factor
+
+
+    @scale_factor.setter
+    def scale_factor(self, value):
+        if value == 1000:
+            self.metadata.update({
             'driver': 'GTiff',
             'count': 1})
-        return int_array, meta
+        elif value == 1:
+            self.metadata.update({
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1})
+        else:
+            raise ValueError("Allowed scale factors are: 1 or 1000")
+        self._scale_factor = value
+
+
+    def _scale_and_round(self, arr):
+        array = arr * self.scale_factor
+        if self.scale_factor == 1000:
+            array = array.astype(int)
+        return array, self.metadata
 
 
     def calc_ndvi(self, red_src, nir_src):
@@ -399,8 +430,8 @@ class Indexes:
         where_are_NaNs = np.isnan(ndvi)
         ndvi[where_are_NaNs] = 0
 
-        new_meta = nir_src.profile.copy()
-        return self._scale_and_round(ndvi, new_meta)
+        return self._scale_and_round(ndvi)
+
 
     def calc_nbr(self, nir_src, swir_src):
         """ Normalized Burn Ratio """
@@ -412,8 +443,8 @@ class Indexes:
         # replace nan with 0
         where_are_NaNs = np.isnan(nbr)
         nbr[where_are_NaNs] = 0
-        new_meta = nir_src.profile.copy()
-        return self._scale_and_round(nbr, new_meta)
+        return self._scale_and_round(nbr)
+
 
     def calc_bsi(self, blue_src, red_src, nir_src, swir_src):
         """ Bare Soil Index (BSI) """
@@ -427,8 +458,8 @@ class Indexes:
         # replace nan with 0
         where_are_NaNs = np.isnan(bsi)
         bsi[where_are_NaNs] = 0
-        new_meta = nir_src.profile.copy()
-        return self._scale_and_round(bsi, new_meta)
+        return self._scale_and_round(bsi)
+
 
     def calc_ndwi(self, green_src, nir_src):
         """ Normalized Difference Water Index (NDWI)  """
@@ -440,8 +471,7 @@ class Indexes:
         # replace nan with 0
         where_are_NaNs = np.isnan(ndwi)
         ndwi[where_are_NaNs] = 0
-        new_meta = nir_src.profile.copy()
-        return self._scale_and_round(ndwi, new_meta)
+        return self._scale_and_round(ndwi)
 
 
 class Rstack:
