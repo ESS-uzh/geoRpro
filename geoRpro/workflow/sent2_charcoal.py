@@ -74,7 +74,9 @@ def make_raster_stack():
                                            ("calc_nbr", [rstack.items[0], rstack.items[9]]),
                                            ("calc_bsi", [rstack.items[1], rstack.items[3], rstack.items[0], rstack.items[9]]),
                                            ("calc_ndwi", [rstack.items[2], rstack.items[0]])])
-            indexes = Indexes()
+
+            indexes = Indexes(metadata=rstack.items[0].profile)
+
             for idx,vals in indexes_to_calc.items():
                 arr_idx, meta_idx = getattr(indexes, idx)(*vals)
                 arr_idx_masked = rst.apply_mask(arr_idx, arr_mask.mask, fill_value=9999)
@@ -100,7 +102,7 @@ def extract_Xy(fpath):
     data.remove_class("Agriculture")
     data.remove_class("Building")
     data.remove_class("Road")
-    logger.info("Final data mapping: {data.labels_map}")
+    logger.info(f"Final data mapping: {data.labels_map}")
     fname = "_".join([os.path.basename(fpath).split(".")[0], "training_data.json"])
     data.save(os.path.join(OUTDIR, fname))
     return data.X, data.y
