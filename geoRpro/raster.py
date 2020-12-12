@@ -349,6 +349,14 @@ def load_resample(src, scale=2):
     return arr, metadata
 
 
+def get_windows(src):
+    """
+    Return a list of all windows composing the entire raster
+
+    """
+    return [win for _, win in src.block_windows(1)]
+
+
 def gen_windows(src):
     """
     Yields all windows composing the entire raster
@@ -366,7 +374,6 @@ def gen_blocks(src):
     for _, win in src.block_windows(1):
         arr, meta = load_window(src, win)
         yield arr, meta
-
 
 
 class Indexes:
