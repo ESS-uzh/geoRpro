@@ -16,7 +16,7 @@ import geoRpro.raster as rst
 from geoRpro.raster import Rstack, Indexes
 from geoRpro.sent2 import Sentinel2
 from geoRpro.extract import DataExtractor
-from geoRpro.model import train_RandomForestClf, predict
+from geoRpro.model import train_RandomForestClf, predict, predict_parallel
 from geoRpro.utils import load_json
 
 import logging
@@ -111,11 +111,11 @@ def extract_Xy(fpath):
 if __name__ == "__main__":
 
     # Globals
-    OUTDIR = "/home/diego/tmp/out"
-    BASEDIR = "/home/diego/work/dev/data/Hanneke/27112020/S2B_MSIL2A_20190812T073619_N9999_R092_T37MBN_20200218T143156.SAFE/GRANULE/L2A_T37MBN_A012702_20190812T075555/IMG_DATA"
+    OUTDIR = "" # change me
+    BASEDIR = "" # change me (Full path to IMG_DATA)
     DATA10 = "R10m/"
     DATA20 = "R20m/"
-    POINTS_FP = "/home/diego/work/dev/data/Hanneke/27112020/final_datapoints_22092020/final_datapoints_22092020.shp"
+    POINTS_FP = "" # change me
     s10 = Sentinel2(os.path.join(BASEDIR, DATA10))
     s20 = Sentinel2(os.path.join(BASEDIR, DATA20))
     gdf = gpd.read_file(POINTS_FP)
@@ -128,7 +128,6 @@ if __name__ == "__main__":
         rst.write_array_as_raster(arr_tci, meta_tci, os.path.join(OUTDIR, fname_tci))
 
     fp = make_raster_stack()
-    #fp = "/home/diego/tmp/out/T37MBN_20190812_stack.tif"
     X, y = extract_Xy(fp)
 
     for run in range(1, 31):
@@ -140,7 +139,7 @@ if __name__ == "__main__":
 
         with rasterio.open(fp) as src:
             fname_cls = "_".join([os.path.basename(fp).split(".")[0], "classification_map_" , str(run) +".json"])
-            class_f = predict(src, clf, write=True, fpath=os.path.join(OUTDIR, fname_cls))
+            class_f = predict_parallel(src, clf, write=True, fpath=os.path.join(OUTDIR, fname_cls))
             # save class_f as raster
             new_meta = src.meta.copy()
             new_meta.update({

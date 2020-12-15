@@ -99,3 +99,20 @@ def json_to_disk(json_arr, fpath):
     with open(fpath, 'w', encoding='utf-8') as f:
         json.dump(json_arr, f)
     return fpath
+
+## * helpers
+
+def gen_sublist(ls, inc):
+    """
+    Yield list content in blocks of size inc
+    """
+
+    start = 0
+    block = inc
+
+    while start < len(ls):
+        if block > len(ls):
+            block = len(ls)
+        yield ls[start:block]
+        start = block
+        block = block + inc
