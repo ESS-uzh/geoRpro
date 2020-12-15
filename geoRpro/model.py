@@ -95,7 +95,7 @@ def predict_arr(patch, classifier):
     return class_prediction
 
 
-def predict_parallel(src, classifier, number_of_cpu=4, write=False, fpath=None):
+def predict_parallel(src, classifier, write=False, fpath=None):
     """
     Use a classifier to predict on an entire raster. A number of patches, usually
     equal to the number_of_cpu are processed in parallel
@@ -125,7 +125,9 @@ def predict_parallel(src, classifier, number_of_cpu=4, write=False, fpath=None):
     logger.debug('Numpy arr allocated for classname of type {}'.format(class_final.dtype))
 
     windows = rst.get_windows(src)
-
+    number_of_cpu = joblib.cpu_count()
+    print(f"cpus: {number_of_cpu}")
+    
     for blocks in gen_sublist(windows, number_of_cpu):
         patches =  [rst.load_window(src, w) for w in blocks]
 
