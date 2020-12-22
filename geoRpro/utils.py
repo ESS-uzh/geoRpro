@@ -1,42 +1,7 @@
 import os
 import json
-from tempfile import mkdtemp
 
-import rasterio
 import numpy as np
-
-#from geoRpro.raster import load_ndvi
-import pdb
-## * memfile
-
-#def calc_ndvi_large_raster(finp, fout_name, fout_meta, outdir):
-#    memmap_file = os.path.join(mkdtemp(), 'test.mymemmap')
-#    dest_array = np.memmap(memmap_file, dtype=fout_meta["dtype"], mode='w+',
-#            shape=(fout_meta["height"], fout_meta["width"]))
-#
-#    fout = os.path.join(outdir, fout_name)
-#    with rasterio.open(fout, 'w+', **fout_meta) as src_out:
-#        with rasterio.open(finp) as src_inp:
-#            for ji, win in src_inp.block_windows(1):
-#                #pdb.set_trace()
-#                red_arr = src_inp.read(3, window=win)
-#                nir_arr = src_inp.read(4, window=win)
-#                ndvi = load_ndvi(red_arr, nir_arr)
-#                # convert relative input window location to relative output # windowlocation
-#                # using real world coordinates (bounds)
-#                src_bounds = rasterio.windows.bounds(win, transform=src_inp.profile["transform"])
-#                dst_window = rasterio.windows.from_bounds(*src_bounds, transform=src_out.profile["transform"])
-#
-#                dst_window = rasterio.windows.Window(dst_window.col_off,
-#                    dst_window.row_off, dst_window.width, dst_window.height)
-#
-#                src_out.write(ndvi, window=dst_window)
-#                print(f"Done writing window: {win}")
-#
-#    os.remove(memmap_file)
-#    return fout
-
-
 
 ## * JSON related
 
@@ -100,19 +65,46 @@ def json_to_disk(json_arr, fpath):
         json.dump(json_arr, f)
     return fpath
 
-## * helpers
+## * Helpers
 
-def gen_sublist(ls, inc):
+def gen_sublist(a_list, inc):
     """
-    Yield list content in blocks of size inc
+    Yield a list in blocks of length inc.
+
+    If the length of the list divided by inc does not give a whole
+    number a block of length equal to the reminder is also yielded
+
+    >>> tuple(gen_sublist([1,2,3,4,5,6,7], 3))
+    ([1, 2, 3], [4, 5, 6], [7])
     """
 
     start = 0
     block = inc
 
-    while start < len(ls):
-        if block > len(ls):
-            block = len(ls)
-        yield ls[start:block]
+    while start < len(a_list):
+        if block > len(a_list):
+            block = len(a_list)
+        yield a_list[start:block]
         start = block
         block = block + inc
+
+def gen_current_front_pairs(a_list):
+    """
+    Yield a current element (elements composing the list except for
+    the last one) and all its front elements in pair of two
+
+    >>> tuple(gen_current_front_pairs([1,2,3]))
+    ((1, 2), (1, 3), (2, 3))
+    """
+    idx_current = 0
+    idx_front = 1
+    while idx_current < len(a_list)-1:
+        for el_front in a_list[idx_front:]:
+            yield a_list[idx_current], el_front
+        idx_current += 1
+        idx_front += 1
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
