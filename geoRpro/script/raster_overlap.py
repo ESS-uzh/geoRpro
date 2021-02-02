@@ -26,8 +26,10 @@ import pdb
 if __name__ == "__main__":
 
     BASEDIR = "/home/diego/work/dev/data/amazon/bioDiv_out/"
+    OUTFOLDER_COMMUNE_NAME = "overlap7tiles"
 
-    ras = [fp for fp in glob.glob(os.path.join(BASEDIR, "*_no_rad_filtering/BetaDiversity_BCdiss_PCO_10"))]
+    #ras = [fp for fp in glob.glob(os.path.join(BASEDIR, "*03ndvi*/ALPHA/Shannon_10_Fullres"))]
+    ras = [fp for fp in glob.glob(os.path.join(BASEDIR, "*03ndvi*/BETA/BetaDiversity_BCdiss_PCO_10"))]
 
     with ExitStack() as stack_files:
         srcs = [stack_files.enter_context(rasterio.open(rpath)) for rpath in ras]
@@ -40,17 +42,27 @@ if __name__ == "__main__":
                 intersects.append(poly.intersection(poly_front))
         print(intersects)
 
+        # save a polygon
+        #gdf1 = gpd.GeoDataFrame({"geometry": intersects}, crs=f"EPSG:{srcs[0].crs.to_epsg()}")
+        #gdf1.to_file(os.path.join(BASEDIR, "overlap_polygon"))
+
         for src in srcs:
+            print("")
+            print(f"Run for raster: {src.files[0]} ..")
             for idx, intersect in enumerate(intersects, start=1):
                 try:
                     arr, meta = rst.load_raster_from_poly(src, intersect)
+                    print(f"Overlap found, getting arr from poly: {idx}")
                 except ValueError:
-                    print(f"No overlap found for {src.files[0]} and {intersect} Try the next one ..")
+                    print(f"No overlap found for poly: {idx}")
                     continue
                 else:
-                    fname = "_".join([os.path.dirname(src.files[0]).split("/")[-1].split("_")[0], "BetaDiversity_overlap", str(idx)]) + ".tif"
+                    fname = "_".join([os.path.dirname(src.files[0]).split("/")[-1].split("_")[0], f"poly_{idx}", str(arr.shape[1]), str(arr.shape[2])]) + ".tif"
                     print(fname)
                     print(arr.shape)
                     meta.update({
                     "interleave": "band"})
-                    rst.write_array_as_raster(arr, meta, os.path.join(os.path.dirname(src.files[0]), fname))
+                    OUTDIR = os.path.join(os.path.dirname(src.files[0]), OUTFOLDER_COMMUNE_NAME)
+                    if not os.path.exists(OUTDIR):
+                        os.makedirs(OUTDIR)
+                    rst.write_array_as_raster(arr, meta, os.path.join(OUTDIR, fname))
