@@ -157,10 +157,13 @@ def write_array_as_raster(arr, meta, fpath):
         "np_array must have ndim = 3. \
     Passed np_array of dimension {} instead.".format(arr.ndim)
 
-    with rasterio.open(fpath, 'w', **meta) as dst:
-        for layer_idx in range(arr.shape[0]):
-            # follow gdal convention, start indexing from 1 -> layer_idx+1
-            dst.write_band(layer_idx+1, arr[layer_idx, :, :].astype(meta['dtype']))
+    # Register GDAL format drivers and configuration options with a
+    # context manager.
+    with rasterio.Env():
+        with rasterio.open(fpath, 'w', **meta) as dst:
+            for layer_idx in range(arr.shape[0]):
+                # follow gdal convention, start indexing from 1 -> layer_idx+1
+                dst.write_band(layer_idx+1, arr[layer_idx, :, :].astype(meta['dtype']))
     return fpath
 
 
@@ -186,11 +189,17 @@ def write_raster(srcs, meta, fpath, mask=False):
 
         full path of the new raster
     """
-    with rasterio.open(fpath, 'w', **meta) as dst:
-        for _id, src in enumerate(srcs, start=1):
-            print(f"Writing to disk src with res: {src.res}")
-            arr = src.read(masked=mask)
-            dst.write_band(_id, arr[0, :, :].astype(meta['dtype']))
+
+    # Register GDAL format drivers and configuration options with a
+    # context manager.
+    with rasterio.Env():
+
+        with rasterio.open(fpath, 'w', **meta) as dst:
+            for _id, src in enumerate(srcs, start=1):
+                print(f"Writing to disk src with res: {src.res}")
+                arr = src.read(masked=mask)
+                dst.write_band(_id, arr[0, :, :].astype(meta['dtype']))
+
     return fpath
 
 
@@ -307,7 +316,7 @@ def load_raster_from_poly(src, geom, crop=True):
     return arr, metadata
 
 
-def load_resample(src, scale=2):
+def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
     """
     Change the cell size of an existing raster object.
 
@@ -345,7 +354,7 @@ def load_resample(src, scale=2):
 
     # resampling
     arr = src.read(out_shape=(src.count, int(height), int(width),),
-                   resampling=rasterio.enums.Resampling.nearest)
+                   resampling=method)
     return arr, metadata
 
 
