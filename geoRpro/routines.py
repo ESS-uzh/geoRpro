@@ -59,7 +59,7 @@ def stack_sent2_bands(indir, bands, outdir, window=None):
                 rstack.add_item(src)
             rstack.set_metadata_param('interleave', 'band')
 
-            fname = '_'.join(['S2B', s10.get_tile_number('B02_10m'), s10.get_datetake('B02_10m')])+'.tif'
+            fname = '_'.join([s10.get_tile_number('B02_10m'), s10.get_datetake('B02_10m')])+'.tif'
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
             fpath = rst.write_raster(rstack.items, rstack.metadata_collect, os.path.join(outdir, fname))
@@ -108,56 +108,58 @@ def find_total_overlaps(indir):
                     rst.write_array_as_raster(arr, meta, os.path.join(outdir, fname))
 
 
-def find_tile_overlap(indir, target):
+def find_tile_overlap(indir, ref):
     """
-    Find overlapping areas (polygons) between a target and other rasters.
-    Polygons are written to disk
+    Find overlapping areas (polygons) between a reference (ref) and target 
+    rasters. Polygons are written to disk
 
     indir : strg
             Full path to the directory containing all raster files
 
-    targer : strg
-             Filename of the target raster
+    ref : strg
+          Filename of the reference raster. Filenames are expected to have
+          the following format: tileName_date.tif,
+          e.g. 'T20MPA_20200729.tif'
 
     """
 
     rfiles = [rfile for rfile in os.listdir(indir) if rfile.endswith('.tif')
-            and rfile != target]
+            and rfile != ref]
 
+    outdir = os.path.join(indir, 'overlaps')
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
 
     with ExitStack() as stack_files:
 
-        src_target = stack_files.enter_context(rasterio.open(os.path.join(indir, target)))
+        src_ref = stack_files.enter_context(rasterio.open(os.path.join(indir, ref)))
 
-        outdir_target = os.path.join(indir, src_target.files[0].split("/")[-1].split("_")[1])
-        if not os.path.exists(outdir_target):
-            os.makedirs(outdir_target)
 
         srcs = [stack_files.enter_context(rasterio.open(os.path.join(indir, f)))
                 for f in rfiles]
 
-        poly_target = box(*src_target.bounds)
+        poly_ref = box(*src_ref.bounds)
 
         for idx, src in enumerate(srcs, start=1):
             print("")
-            print(f"Check overlap between {src_target.files[0]} and {src.files[0]}")
+            print(f"Check overlap between {src_ref.files[0]} and {src.files[0]}")
             poly = box(*src.bounds)
-            intersect = poly_target.intersection(poly)
+            intersect = poly_ref.intersection(poly)
             try:
                 arr, meta = rst.load_raster_from_poly(src, intersect)
-                arr_target, meta_target = rst.load_raster_from_poly(src_target, intersect)
+                arr_ref, meta_ref = rst.load_raster_from_poly(src_ref, intersect)
                 print(f"Overlap found, getting arrays from polygon: {idx}")
             except ValueError:
                 print(f"No overlap found for poly: {idx}")
                 continue
             else:
-                fname = "_".join([f"poly_{idx}", str(arr.shape[1]), str(arr.shape[2])]) + ".tif"
-                outdir = os.path.join(indir, src.files[0].split("/")[-1].split("_")[1])
-                if not os.path.exists(outdir):
-                    os.makedirs(outdir)
-                rst.write_array_as_raster(arr, meta, os.path.join(outdir, fname))
-                rst.write_array_as_raster(arr_target, meta_target,
-                        os.path.join(outdir_target, fname))
+                tile_ref = src_ref.files[0].split("/")[-1].split("_")[0]
+                tile_target = src.files[0].split("/")[-1].split("_")[0]
+                fname_ref = "_".join([f"poly_{idx}", tile_ref]) + ".tif"
+                fname_target = "_".join([f"poly_{idx}", tile_target]) + ".tif"
+                rst.write_array_as_raster(arr, meta, os.path.join(outdir, fname_target))
+                rst.write_array_as_raster(arr_ref, meta_ref,
+                        os.path.join(outdir, fname_ref))
 
 
 def replace_raster_values(src, src_mask, vals=[3,7,8,9,10], fill_value=65535):
@@ -205,4 +207,4 @@ def replace_raster_values(src, src_mask, vals=[3,7,8,9,10], fill_value=65535):
 if __name__ == "__main__":
 
     find_tile_overlap('/home/diego/work/dev/data/amazon/SA_MSIL2A_20200729_stacks',
-            'S2B_T20MPA_20200729.tif')
+            'T20MPA_20200729.tif')
