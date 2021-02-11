@@ -1,5 +1,6 @@
 import os
 import copy
+import math
 import logging
 from contextlib import contextmanager
 from contextlib import ExitStack
@@ -202,6 +203,99 @@ def write_raster(srcs, meta, fpath, mask=False):
 
     return fpath
 
+
+def mosaic_rasters(srcs, fpath):
+    """
+    Mosaic raster files band by band and save it to disk
+
+    *********
+
+    params:
+    ---------
+
+        srcs : list
+               collection of rasterio.DatasetReader objects
+
+        fpath : full path of the final raster mosaic
+    """
+
+    first_src = srcs[0]
+    first_res = first_src.res
+    dtype = first_src.dtypes[0]
+    # Determine output band count
+    output_count = first_src.count
+
+
+    # Extent of all inputs
+    # scan input files
+    xs = []
+    ys = []
+    for src in srcs:
+        left, bottom, right, top = src.bounds
+        xs.extend([left, right])
+        ys.extend([bottom, top])
+    dst_w, dst_s, dst_e, dst_n = min(xs), min(ys), max(xs), max(ys)
+
+    out_transform = rasterio.Affine.translation(dst_w, dst_n)
+
+    # Resolution/pixel size
+    res = first_res
+    out_transform *= rasterio.Affine.scale(res[0], -res[1])
+
+    # Compute output array shape. We guarantee it will cover the output
+    # bounds completely
+    output_width = int(math.ceil((dst_e - dst_w) / res[0]))
+    output_height = int(math.ceil((dst_n - dst_s) / res[1]))
+
+    # Adjust bounds to fit
+    dst_e, dst_s = out_transform * (output_width, output_height)
+    # create destination array
+    # destination array shape
+    shape = (output_height, output_width)
+    # dest = np.zeros((output_count, output_height, output_width), dtype=dtype)
+    # Using numpy.memmap to create arrays directly mapped into a file
+    from tempfile import mkdtemp
+    memmap_file = os.path.join(mkdtemp(), 'test.mymemmap')
+    dest_array = np.memmap(memmap_file, dtype=dtype, mode='w+', shape=shape)
+
+    dest_profile = {
+            "driver": 'GTiff',
+            "height": dest_array.shape[0],
+            "width": dest_array.shape[1],
+            "count": output_count,
+            "dtype": dest_array.dtype,
+            "crs": '+proj=latlong',
+            "transform": out_transform
+    }
+
+    # open output file in write/read mode and fill with destination mosaic array
+    with rasterio.open(fpath, 'w+', **dest_profile) as mosaic_raster:
+        for src in srcs:
+            for ji, src_window in src.block_windows():
+                print(ji)
+                arr = src.read(window=src_window)
+                # store raster nodata value
+                nodata = src.nodatavals[0]
+                # replace zeros with nan
+                #arr[arr == nodata] = np.nan
+                # convert relative input window location to relative output # windowlocation
+                # using real world coordinates (bounds)
+                src_bounds = rasterio.windows.bounds(src_window, transform=src.profile["transform"])
+                dst_window = rasterio.windows.from_bounds(*src_bounds, transform=mosaic_raster.profile["transform"])
+
+                # round the values of dest_window as they can be float
+                dst_window = rasterio.windows.Window(round(dst_window.col_off), round(dst_window.row_off), round(dst_window.width), round(dst_window.height))
+                # before writing the window, replace source nodata with dest
+                # nodataas it can already have been written (e.g. another adjacent # country)
+                # https://stackoverflow.com/a/43590909/1979665
+                dest_pre = mosaic_raster.read(window=dst_window)
+                mask = (arr == nodata)
+                r_mod = np.copy(arr)
+                r_mod[mask] = dest_pre[mask]
+                mosaic_raster.write(r_mod, window=dst_window)
+
+    os.remove(memmap_file)
+    return fpath
 
 # - utils for processing src: rasterio.DataSetReader
 
