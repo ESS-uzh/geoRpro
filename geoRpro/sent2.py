@@ -50,6 +50,9 @@ class Sentinel2:
                 print("This band: '{}' was not found".format(b))
         return rfiles
 
+    def get_fpath(self, band):
+        fpath = self._lookup[band][0]
+        return fpath
 
     def get_datetake(self, band):
         try:
