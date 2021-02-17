@@ -352,7 +352,7 @@ def load_bands(src, indexes, masked=False):
     return arr, metadata
 
 
-def load_window(src, window, masked=False):
+def load_window(src, window, masked=False, indexes=None):
     """
     Load a raster array from a window
 
@@ -368,16 +368,24 @@ def load_window(src, window, masked=False):
         masked : bool (default:False)
                  if True exclude nodata values
 
+        indexes : list
+                  list of bands to load, e.g. [1,2,3]
+
     return:
         tuple: array, metadata
   """
-    arr = src.read(window=window, masked=masked)
     metadata = src.profile
     metadata.update({
         'driver': 'GTiff',
         'height': window.height,
         'width': window.width,
         'transform': rasterio.windows.transform(window, src.transform)})
+    if indexes:
+        arr = src.read(indexes, window=window, masked=masked)
+        metadata.update({
+            'count': len(indexes)})
+    else:
+        arr = src.read(window=window, masked=masked)
     return arr, metadata
 
 
