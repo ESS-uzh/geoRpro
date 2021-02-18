@@ -20,10 +20,23 @@ logger.setLevel(logging.INFO)
 
 def calc_diff_arr(arr1, arr2):
     """
-    Calculate absolute difference between two arrays. The array are min-max
+    Calculate absolute difference between two arrays. The arrays are min-max
     normalized first.
+    
+    *************
 
-    Return normalizead arrays and thier absolute difference
+    params
+    ____________
+
+    arr1 : nd numpy array 
+
+    arr2 : nd numpy array  
+
+    
+    return:
+           tuple
+           normalizead arrays and thier absolute difference
+
     """
     arr1 = np.nan_to_num(arr1, nan=0)
     # use min-max normalization to make it comparable
@@ -43,6 +56,11 @@ def polyfit(x, y, degree=1):
     to points (x, y). Returns a vector of coefficients p that minimises
     the squared error.
 
+    *************
+
+    params
+    ____________
+
     x : 1D numpy array
         x values
 
@@ -51,22 +69,37 @@ def polyfit(x, y, degree=1):
 
     degree : int
              Degree of the fitting polynomial
+
+
+    return: 
+           1D numpy atrray
+           Coefficients of the model used to fit the x,y data
     """
     return np.polyfit(x, y, degree)
 
 
 def calc_r_squared(model, x, y):
     """
-    Return a r squared error between real and predicted values
+    Compute the r squared error between real and predicted values
 
     model: 1D numpy array
            vector of coefficients returned by the polyfit func
+
+    *************
+
+    params
+    ____________
 
     x : 1D numpy array
         x values, used to make the prediciton based on the model
 
     y : 1D numpy array
         real y values
+
+    
+    return:
+           float
+           r squared value
     """
 
     predict = np.poly1d(model)
@@ -75,9 +108,15 @@ def calc_r_squared(model, x, y):
 
 def build_a_line(model, x):
     """
-    Return a line equation using a linear model
+    Compute y values based on x values and model coefficients. It expects a 
+    linear model, i.e. two coefficients
 
-    model: 1D numpy array
+    *************
+
+    params
+    ____________
+
+    model : 1D numpy array
            (m, b)
     x : 1D numpy array
 
@@ -85,9 +124,19 @@ def build_a_line(model, x):
     """
     return model[0]*x - model[1]
 
+
 def gen_bands(src_1, src_2):
     """
-    Yield all the bands of src_1 and src_2 as arrays
+    Yield all the bands of src_1 and src_2 as numpy arrays
+
+    *************
+
+    params
+    ____________
+
+    src_1 : rasterio.DatasetReader object
+
+    src_2 : rasterio.DatasetReader object
     """
     for i in range(1, src_1.count+1):
         arr1, _= rst.load_bands(src_1, [i])
@@ -97,7 +146,23 @@ def gen_bands(src_1, src_2):
 
 def array_correction(model, arr_y, arr_x):
     """
-    Correct the arr_y based on a linear model
+    Compute new arr_y values based on a linear model
+
+    *************
+
+    params
+    ____________
+
+    
+    model : 1D numpy array
+            (m, b)
+ 
+    arr_y : nd numpy array
+
+    arr_x : nd numpy array
+
+    return: nd numpy array
+            arr_y_corrected (casted into uint16 dtype (Sent2 dtype))
     """
     # correct arr_y using the model params and arr_x as x
     arr_y_corr = model[0]*arr_x + model[1]
@@ -112,22 +177,35 @@ def array_correction(model, arr_y, arr_x):
 
 
 
-def bands_correlation(src_1, src_2, threshold=0.005):
+def bands_correlation(src_ref, src_target, threshold=0.005):
     """
-    Find the correlation between the bands of two overlapping
-    polygons using a linear model, i.e. src_1 and src_2.
+    Find the correlation between all bands (in pair) of two overlapping
+    polygons, i.e. src_ref and src_target using a linear model
 
-    Compute the diff array between two bands and find its mean value.
-    If the mean values of the diff array is higher than the threshold the
-    scr_2 band is corrected using array_correction(), then a new diff array,
-    i.e. diff_corr is computed.
+    Compute the mean value of tha absolute difference (Reference-Target) for
+    each band.
+    If the mean value is higher than the threshold param the Target band 
+    is corrected using array_correction(). 
+    A new mean value (Reference-Target corrected) is computed
+    
 
-    Return a dictionary mapping the bands that need correction and their
-    model params
+    *************
 
+    params
+    ____________
+
+    src_ref : rasterio.DatasetReader object
+              Reference overlapping polygon 
+
+    src_target : rasterio.DatasetReader object
+                 Target overlapping polygon 
+
+    return : dict
+             A mapping of all bands of the Target that need correction
+             with their respective model coefficients
     """
     corrections = {}
-    for idx, arrays in enumerate(gen_bands(src_1, src_2), start=1):
+    for idx, arrays in enumerate(gen_bands(src_ref, src_target), start=1):
         model = polyfit(x=arrays[0].flatten(), y=arrays[1].flatten())
         print(f'Band: {idx}')
         print(f'Model params: {model}')
@@ -150,6 +228,26 @@ def bands_correlation(src_1, src_2, threshold=0.005):
 def apply_band_correction(src_ref, src_target, model, band=1):
     """
     Apply a correction to an entire band
+
+    *************
+
+    params
+    ____________
+    
+    src_ref : rasterio.DatasetReader object
+              Reference raster 
+
+    src_target : rasterio.DatasetReader object
+                 Target raster 
+
+    model : 1D numpy array
+            (m, b)
+
+    band : int
+           band number 
+
+    return : nd numpy array
+             target corrected 
     """
     array_corrected = np.empty((1, src_target.height, src_target.width), dtype=np.int64)
 
@@ -164,9 +262,29 @@ def apply_band_correction(src_ref, src_target, model, band=1):
 
 def apply_correlation_correction(src_ref, src_target, corrections, outdir):
     """
-    Create a corrected src_target stack. All the bands of src_target stack
-    that appear in the correction param are corrected using the respective model
+    Write to disk a corrected Target raster stack. All the bands of src_target stack
+    that appear in the corrections param are corrected using the respective model
     params
+
+    *************
+
+    params
+    ____________
+    
+    src_ref : rasterio.DatasetReader object
+              Reference raster 
+
+    src_target : rasterio.DatasetReader object
+                 Target raster 
+    
+    corrections: dict
+                 band number: model coefficients
+
+    outdir : strg
+             full path to output directory
+
+    return: strg
+            full path to the corrected raster stack
     """
     print(f'Apply correction to {src_target.files[0]}')
     with ExitStack() as stack_action:
