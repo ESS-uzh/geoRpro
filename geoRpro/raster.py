@@ -352,7 +352,7 @@ def load_bands(src, indexes, masked=False):
     return arr, metadata
 
 
-def load_window(src, window, masked=False, indexes=None):
+def load_window(src, window, masked=False, bands=None):
     """
     Load a raster array from a window
 
@@ -368,8 +368,8 @@ def load_window(src, window, masked=False, indexes=None):
         masked : bool (default:False)
                  if True exclude nodata values
 
-        indexes : list
-                  list of bands to load, e.g. [1,2,3]
+        bands : list
+                list of bands to load, e.g. [1,2,3]
 
     return:
         tuple: array, metadata
@@ -380,8 +380,8 @@ def load_window(src, window, masked=False, indexes=None):
         'height': window.height,
         'width': window.width,
         'transform': rasterio.windows.transform(window, src.transform)})
-    if indexes:
-        arr = src.read(indexes, window=window, masked=masked)
+    if bands:
+        arr = src.read(bands, window=window, masked=masked)
         metadata.update({
             'count': len(indexes)})
     else:
@@ -537,7 +537,7 @@ class Indexes:
         return array, self.metadata
 
 
-    def calc_ndvi(self, red_src, nir_src):
+    def ndvi(self, red_src, nir_src):
         # to do: check for rasters to be (1, width, height)
         redB = red_src.read()
         nirB = nir_src.read()
@@ -551,7 +551,7 @@ class Indexes:
         return self._scale_and_round(ndvi)
 
 
-    def calc_nbr(self, nir_src, swir_src):
+    def nbr(self, nir_src, swir_src):
         """ Normalized Burn Ratio """
         nirB = nir_src.read()
         swirB = swir_src.read()
@@ -564,7 +564,7 @@ class Indexes:
         return self._scale_and_round(nbr)
 
 
-    def calc_bsi(self, blue_src, red_src, nir_src, swir_src):
+    def bsi(self, blue_src, red_src, nir_src, swir_src):
         """ Bare Soil Index (BSI) """
         blueB = blue_src.read()
         redB = red_src.read()
@@ -579,7 +579,7 @@ class Indexes:
         return self._scale_and_round(bsi)
 
 
-    def calc_ndwi(self, green_src, nir_src):
+    def ndwi(self, green_src, nir_src):
         """ Normalized Difference Water Index (NDWI)  """
         greenB = green_src.read()
         nirB = nir_src.read()
