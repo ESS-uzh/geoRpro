@@ -5,7 +5,7 @@ import rasterio
 from shapely.geometry import box, Point
 
 from geoRpro.sent2 import Sentinel2
-from geoRpro.raster import Rstack
+from geoRpro.raster import Rstack, Indexes
 import geoRpro.raster as rst
 import geoRpro.utils as ut
 
@@ -13,25 +13,46 @@ import pdb
 
 # * Commune routines
 
-def stack_sent2_bands(indir, bands, outdir, window=None):
+def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
+        window=None, polygon=None, indexes=None):
     """
-    Create a stack of sentinel 2 bands of 10m resolution
+    Create a stack of sentinel 2 bands with defined spacial resolution
 
     **********
 
     params
     ---------
 
-    indir: strg
+    indir : strg
+            full path to the IMG_DATA folder. This directory is expected to have
+            the standard sent2 structure, i.e. three subdirerctories: R10m, R20m
+            and R60m
 
-    bands: list
+    bands : list
+            Bands that should be included into the stack, e.g. 'B02_10m' or 'B05_20m'
 
-    outdir: strg
+    outdir : strg
+             full path to the output directory
 
-    window: rasterio.windows.Window
+    resolution : int
+                 final resolution of all the bands of the stack
+
+    mask : numpy boolean mask arr
+
+    window : rasterio.windows.Window
+             Define a final extent of the stack
+
+    polygon : GEOJson-like dict
+              e.g. { 'type': 'Polygon', 'coordinates': [[(),(),(),()]] }
+             Define a final extent of the stack
+
+    indexes: OrderDict
     """
     s10 = Sentinel2(os.path.join(indir, 'R10m'))
     s20 = Sentinel2(os.path.join(indir, 'R20m'))
+
+    if window is not None and polygon is not None:
+        raise ValueError("Cannot choose both window and polygon params!")
 
     with ExitStack() as stack_files:
 
@@ -40,23 +61,57 @@ def stack_sent2_bands(indir, bands, outdir, window=None):
             try:
                 fpaths.append(s10.get_fpath(band))
             except KeyError:
-                fpaths.append(s20.get_fpath(band))
+                try:
+                    fpaths.append(s20.get_fpath(band))
+                except KeyError:
+                    raise ValueError(f"Cannot find band: '{band}'. Please provide valid band name.")
 
         srcs = [stack_files.enter_context(rasterio.open(fp))
             for fp in fpaths]
 
+        band_src_map = dict(zip(bands, srcs))
+
         with ExitStack() as stack_action:
             rstack = Rstack()
-            for src in srcs:
-                if int(src.res[0]) == 20: # resample to 10 m
-                    print(f"scr to resample, res: {src.res}")
-                    arr_r, meta = rst.load_resample(src)
-                    src = stack_action.enter_context(rst.to_src(arr_r, meta))
+            for band, src in band_src_map.items():
+                print(f'Band {band} to be processed..')
+                if int(src.res[0]) != resolution: # resample to match res param
+                    print(f'Band: {band} will be resampled to {resolution} m resolution..')
+                    scale_factor = src.res[0] / resolution
+                    arr, meta = rst.load_resample(src, scale_factor)
+                    if mask:
+                        arr = rst.apply_mask(arr, mask, fill_value=65535)
+                    src = stack_action.enter_context(rst.to_src(arr, meta))
                 if window:
+                    print(f'Selected a window: {window} as AOI')
                     arr, meta = rst.load_window(src, window)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
-                print(f"scr to add to the stack with res: {src.res}")
+                if polygon:
+                    print(f"Selected a polygon: {polygon['coordinates']} as AOI")
+                    arr, meta = rst.load_raster_from_poly(src, polygon)
+                    src = stack_action.enter_context(rst.to_src(arr, meta))
+                band_src_map[band] = src # update the mapping
                 rstack.add_item(src)
+
+            if indexes:
+                print(f'Compute indexes: {indexes.keys()} and add them to the stack')
+
+                to_calc = Indexes(metadata=rstack.items[0].profile)
+
+                for idx,vals in indexes.items():
+                    try:
+                        vals = [band_src_map[v] for v in vals]
+                    except KeyError:
+                        raise ValueError(f"One or more bands: '{vals}' were not defined as part of the stack.")
+                    try:
+                        arr_idx, meta_idx = getattr(to_calc, idx)(*vals)
+                    except AttributeError:
+                        raise ValueError(f"'{idx}' is not a valid Index method")
+                    arr_idx, meta_idx = getattr(to_calc, idx)(*vals)
+                    src_idx = stack_action.enter_context(rst.to_src(arr_idx, meta_idx))
+                    band_src_map[idx] = src_idx # update the mapping
+                    rstack.add_item(src_idx)
+
             rstack.set_metadata_param('interleave', 'band')
 
             fname = '_'.join([s10.get_tile_number('B02_10m'), s10.get_datetake('B02_10m')])+'.tif'
@@ -110,7 +165,7 @@ def find_total_overlaps(indir):
 
 def find_tile_overlap(indir, ref):
     """
-    Find overlapping areas (polygons) between a reference (ref) and target 
+    Find overlapping areas (polygons) between a reference (ref) and target
     rasters. Polygons are written to disk
 
     indir : strg
@@ -147,7 +202,11 @@ def find_tile_overlap(indir, ref):
             intersect = poly_ref.intersection(poly)
             try:
                 arr, meta = rst.load_raster_from_poly(src, intersect)
+                meta.update({
+                    "interleave": "band"})
                 arr_ref, meta_ref = rst.load_raster_from_poly(src_ref, intersect)
+                meta_ref.update({
+                    "interleave": "band"})
                 print(f"Overlap found, getting arrays from polygon: {idx}")
             except ValueError:
                 print(f"No overlap found for poly: {idx}")
@@ -162,7 +221,7 @@ def find_tile_overlap(indir, ref):
                         os.path.join(outdir, fname_ref))
 
 
-def replace_raster_values(src, src_mask, vals=[3,7,8,9,10], fill_value=65535):
+def raster_to_mask(fpath, resolution, rule, polygon=None, window=None):
     """
     Routine:
 
@@ -188,23 +247,9 @@ def replace_raster_values(src, src_mask, vals=[3,7,8,9,10], fill_value=65535):
                   replacing values
 
     """
-    arr, _ = rst.load(src, masked=True)
-
-    res = int(src.res[0])
-    res_mask = int(src_mask.res[0])
-
-    if res != res_mask: # resample src_sc to match src
-        scale_factor = res / res_mask
-        arr_mask, meta_mask = rst.load_resample(src_mask, scale_factor)
-    else:
-        arr_mask, meta_mask = rst.load(src_mask)
-
-    # create a mask array from src_mask file
-    mask_arr, _ = rst.mask_vals(arr_mask, meta_mask, vals)
-
-    return rst.apply_mask(arr, mask_arr.mask, fill_value=fill_value)
+    pass
 
 if __name__ == "__main__":
 
-    find_tile_overlap('/home/diego/work/dev/data/amazon/SA_MSIL2A_20200729_stacks',
+    find_tile_overlap('/home/diego/work/dev/data/amazon/20200729_stacks',
             'T20MPA_20200729.tif')
