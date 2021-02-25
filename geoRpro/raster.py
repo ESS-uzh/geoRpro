@@ -383,7 +383,7 @@ def load_window(src, window, masked=False, bands=None):
     if bands:
         arr = src.read(bands, window=window, masked=masked)
         metadata.update({
-            'count': len(indexes)})
+            'count': len(bands)})
     else:
         arr = src.read(window=window, masked=masked)
     return arr, metadata
