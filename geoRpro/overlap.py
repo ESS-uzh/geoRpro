@@ -164,7 +164,7 @@ def array_correction(model, target):
             arr_y_corrected (casted into uint16 dtype (Sent2 dtype))
     """
     # correct arr_y using the model params and arr_x as x
-    target_corr = model[0]*target + model[1]
+    target_corr = target - model[1]
     # check whether correction has produced negative values
     neg_row_idx, neg_col_idx  = np.where(target_corr[0,:,:] < 0)
     if neg_row_idx.size != 0:
