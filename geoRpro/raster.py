@@ -323,7 +323,7 @@ def load(src, masked=False):
     return arr, metadata
 
 
-def load_bands(src, indexes, masked=False):
+def load_bands(src, bands, masked=False):
     """
     Load selected bands of a raster as array
 
@@ -334,7 +334,7 @@ def load_bands(src, indexes, masked=False):
 
         src : rasterio.DatasetReader object
 
-        indexes : list
+        bands : list
                   list of bands to load, e.g. [1,2,3]
 
         masked : bool (default:False)
@@ -344,11 +344,11 @@ def load_bands(src, indexes, masked=False):
     return:
         tuple: array, metadata
     """
-    arr = src.read(indexes, masked=masked)
+    arr = src.read(bands, masked=masked)
     metadata = src.profile
     metadata.update({
         'driver': 'GTiff',
-        'count': len(indexes)})
+        'count': len(bands)})
     return arr, metadata
 
 
