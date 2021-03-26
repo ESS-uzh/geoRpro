@@ -125,6 +125,7 @@ def to_src(arr, metadata):
             else:
                 data.write(arr.astype(metadata['dtype']))
                 logger.debug(f"Saved array and metadata as DataSetWriter")
+            del arr
         with memfile.open() as data:  # Reopen as DatasetReader
           yield data
 
