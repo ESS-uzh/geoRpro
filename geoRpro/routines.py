@@ -87,7 +87,7 @@ def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
                     arr, meta = rst.load_window(src, window)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
                 if polygon:
-                    print(f"Selected a polygon: {polygon['coordinates']} as AOI")
+                    print(f"Selected a polygon as AOI")
                     arr, meta = rst.load_raster_from_poly(src, polygon)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
                 band_src_map[band] = src # update the mapping
@@ -113,12 +113,13 @@ def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
                     rstack.add_item(src_idx)
 
             rstack.set_metadata_param('interleave', 'band')
+            print(band_src_map.keys())
 
             fname = '_'.join([s10.get_tile_number('B02_10m'), s10.get_datetake('B02_10m')])+'.tif'
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
             fpath = rst.write_raster(rstack.items, rstack.metadata_collect, os.path.join(outdir, fname))
-        print(fpath)
+        return fpath
 
 
 def find_total_overlaps(indir):
