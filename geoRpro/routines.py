@@ -14,7 +14,7 @@ import pdb
 # * Commune routines
 
 def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
-        window=None, polygon=None, indexes=None):
+        window=None, polygon=None, indexes=None, fname=None):
     """
     Create a stack of sentinel 2 bands with defined spacial resolution
 
@@ -45,6 +45,9 @@ def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
     polygon : GEOJson-like dict
               e.g. { 'type': 'Polygon', 'coordinates': [[(),(),(),()]] }
              Define a final extent of the stack
+    
+    fnam: strg
+          Name of the output raster stack; e.g. my_stack.tif
 
     indexes: OrderDict
     """
@@ -114,8 +117,9 @@ def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
 
             rstack.set_metadata_param('interleave', 'band')
             print(band_src_map.keys())
-
-            fname = '_'.join([s10.get_tile_number('B02_10m'), s10.get_datetake('B02_10m')])+'.tif'
+            
+            if not fname:
+                fname = '_'.join([s10.get_tile_number('B02_10m'), s10.get_datetake('B02_10m')])+'.tif'
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
             fpath = rst.write_raster(rstack.items, rstack.metadata_collect, os.path.join(outdir, fname))
