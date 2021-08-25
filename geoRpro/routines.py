@@ -78,21 +78,31 @@ def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
             rstack = Rstack()
             for band, src in band_src_map.items():
                 print(f'Band {band} to be processed..')
+
                 if int(src.res[0]) != resolution: # resample to match res param
                     print(f'Band: {band} will be resampled to {resolution} m resolution..')
                     scale_factor = src.res[0] / resolution
                     arr, meta = rst.load_resample(src, scale_factor)
-                    if mask:
-                        arr = rst.apply_mask(arr, mask, fill_value=65535)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
+
                 if window:
                     print(f'Selected a window: {window} as AOI')
                     arr, meta = rst.load_window(src, window)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
+
                 if polygon:
                     print(f"Selected a polygon as AOI")
                     arr, meta = rst.load_raster_from_poly(src, polygon)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
+
+                if mask.any():
+                    print(f"Selected a mask for band {band}")
+                    # check that mask and array are the same dimension
+                    arr, meta = rst.load(src)
+                    assert mask.shape == arr.shape, 'Array and mask must the have same shape'
+                    arr = rst.apply_mask(arr, mask, fill_value=9999)
+                    src = stack_action.enter_context(rst.to_src(arr, meta))
+
                 band_src_map[band] = src # update the mapping
                 rstack.add_item(src)
 
