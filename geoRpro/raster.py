@@ -116,6 +116,9 @@ def apply_mask(arr, mask, fill_value=0):
 @contextmanager
 def to_src(arr, metadata):
 
+    if metadata['driver'] != 'GTiff':
+        metadata['driver'] = 'GTiff'
+
     with ExitStack() as stack:
         memfile = stack.enter_context(rasterio.MemoryFile())
         with memfile.open(**metadata) as data: # Open as DatasetWriter
