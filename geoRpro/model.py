@@ -2,6 +2,7 @@ import time
 import os
 import json
 import sys
+from pprint import pformat
 
 import joblib
 from joblib import Parallel, delayed
@@ -30,40 +31,103 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def cohen_kappa(confusion):
+    """
+    Simplified version of: cohen_kappa_score
+    https://github.com/scikit-learn/scikit-learn/blob/main/sklearn/metrics/_classification.py
+    """
+    n_classes = confusion.shape[0]
+    sum0 = np.sum(confusion, axis=0)
+    sum1 = np.sum(confusion, axis=1)
+    expected = np.outer(sum0, sum1) / np.sum(sum0)
+
+    w_mat = np.ones([n_classes, n_classes], dtype=int)
+    w_mat.flat[:: n_classes + 1] = 0
+    k = np.sum(w_mat * confusion) / np.sum(w_mat * expected)
+    return 1 - k
+
+
 def train_RandomForestClf(X, y, estimators):
     """
     Use train_test split to get accuacy of a Random forerst classifier
     """
-    logger.info('Start to train the model...')
+    logger.info(f'Start to train the model with estimators: {estimators}')
+    data = {}
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, stratify=y)
 
     clf = RandomForestClassifier(n_estimators=estimators)
     clf.fit(X_train, y_train)
-    # Acc on X_train
-    y_pred_train = clf.predict(X_train)
-    logger.info(f"Train overall accuracy: {accuracy_score(y_train, y_pred_train)}")
-    # Acc on X_test
-    y_pred = clf.predict(X_test)
 
-    cm = confusion_matrix(y_test,y_pred)
-    diag = np.diagonal(cm, offset=0)
+    # Acc on X_train (Internal)
+    y_pred_train = clf.predict(X_train)
+    cm_train = confusion_matrix(y_train,y_pred_train)
+
+    ## NOTE!! This is a new confusion matrix without dummy classes
+    ## Valid ONLY for a specific case. To be removed or generalized !!
+    cm_train = cm_train[:-2, :-2]
+    strg_cm_train = np.array2string(cm_train)
+    data['cm_train'] = cm_train
+    internal_accuracy=sum(np.diagonal(cm_train))/np.sum(cm_train)
+    internal_kappa=cohen_kappa(cm_train)
+    data['train_oa'] = internal_accuracy
+    data['train_ck'] = internal_kappa
+    logger.info(f"Train overall accuracy: {internal_accuracy}")
+    logger.info(f"Train cohen_kappa accuracy: {internal_kappa}")
+
+
+    # Acc on X_test (External)
+    y_pred = clf.predict(X_test)
+    cm_test = confusion_matrix(y_test,y_pred)
+    ## NOTE!! This is a new confusion matrix without dummy classes
+    ## Valid ONLY for a specific case. To be removed or generalized !!
+    cm_test = cm_test[:-2, :-2]
+    strg_cm_test = np.array2string(cm_test)
+    data['cm_test'] = cm_test
+    external_accuracy=sum(np.diagonal(cm_test))/np.sum(cm_test)
+    external_kappa=cohen_kappa(cm_test)
+    data['test_oa'] = external_accuracy
+    data['test_ck'] = external_kappa
+    logger.info(f"Test overall accuracy: {external_accuracy}")
+    logger.info(f"Test cohen_kappa accuracy: {external_kappa}")
+    
+    diag = np.diagonal(cm_test, offset=0)
     label_ids = np.unique(y)
+    data['commission_error'] = {}
+    data['omission_error'] = {}
+    data['user_accuracy'] = {}
+    data['producer_accuracy'] = {}
+
+    logger.info(f"Commission error:")
+    for idx, row in enumerate(cm_test):
+        commission_error  =  round( sum(np.delete(row, idx)) / sum(row), 2)
+        label = label_ids[idx]
+        data['commission_error'][label] = commission_error
+        logger.info(f"label_id: {label_ids[idx]}, commission error {commission_error}")
+
+    logger.info(f"Omission error:")
+    for idx, col in enumerate(cm_test.T):
+        omission_error  =  round( sum(np.delete(col, idx)) / sum(col), 2)
+        label = label_ids[idx]
+        data['omission_error'][label] = omission_error
+        logger.info(f"label_id: {label_ids[idx]}, omission error {omission_error}")
 
     logger.info(f"User accuracy:")
-    for idx, row in enumerate(cm):
+    for idx, row in enumerate(cm_test):
         user_accuracy  =  round( diag[idx] / sum(row), 2)
+        label = label_ids[idx]
+        data['user_accuracy'][label] = user_accuracy
         logger.info(f"label_id: {label_ids[idx]}, user accuracy {user_accuracy}")
 
     logger.info(f"Producer accuracy:")
-    for idx, col in enumerate(cm.T):
+    for idx, col in enumerate(cm_test.T):
         producer_accuracy  = round( diag[idx] / sum(col), 2)
+        label = label_ids[idx]
+        data['producer_accuracy'][label] = producer_accuracy
         logger.info(f"label_id: {label_ids[idx]}, producer accuracy {producer_accuracy}")
 
-    logger.info(f"Test overall accuracy: {accuracy_score(y_test, y_pred)}")
-    logger.info(f"Test cohen_kappa accuracy: {cohen_kappa_score(y_test, y_pred)}")
     ##print(classification_report(y_test,y_pred))
-    return clf
+    return clf, data
 
 
 def predict_arr(patch, classifier):
