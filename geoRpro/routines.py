@@ -1,5 +1,6 @@
 import os
 from contextlib import ExitStack
+import numpy as np
 
 import rasterio
 from shapely.geometry import box, Point
@@ -13,7 +14,7 @@ import pdb
 
 # * Commune routines
 
-def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
+def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=False,
         window=None, polygon=None, indexes=None, fname=None):
     """
     Create a stack of sentinel 2 bands with defined spacial resolution
@@ -95,7 +96,7 @@ def stack_sent2_bands(indir, bands, outdir, resolution=10, mask=None,
                     arr, meta = rst.load_raster_from_poly(src, polygon)
                     src = stack_action.enter_context(rst.to_src(arr, meta))
 
-                if mask.any():
+                if np.any(mask):
                     print(f"Selected a mask for band {band}")
                     # check that mask and array are the same dimension
                     arr, meta = rst.load(src)
