@@ -21,6 +21,37 @@ logger.setLevel(logging.DEBUG)
 import pdb
 
 class DataExtractor:
+    """
+    Container for X features (georaster pixel values) and y labels (class id) matrix
+
+    *********
+    
+    params:
+    _________
+
+
+    X : 2D numpy array
+        features matrix, contains raster values for each band (points, bands)
+        
+
+    y : 1D numpy array
+        labels matrix, contains ids of all classes
+
+    labels_map : dict
+                 'classname': 'id' mapping
+
+
+       Example:
+
+       X         band1  band2 ... band_n          y
+       Point1    val1   val2  ... val_n           id
+       Point2                                     id
+       .                                          .
+       .                                          .
+       Point_n                                    id_n  
+
+
+    """
     def __init__(self, X, y, labels_map):
 
         self.X = X
@@ -115,27 +146,26 @@ class DataExtractor:
         pass
 
     @classmethod
-    def extract(cls, src, gdf, mask_value=0):
+    def extract(cls, src, gdf, mask_value=9999):
         """
-        Extract the pixel values at point location from a raster src
-
-        Return:
-
-        X matrix (Points, raster bands)
-        y vector (point id)
-        classname_id mapping
-
-        X         col1 col2 ... band_n          y
-        Point1    val1 val2                     id
-        Point2                                  id
-
-        ************
+        Extract the pixel values at point location from a georaster
+        
+        **********
 
         params:
-            src -> rasterio.DatasetReader
-            gdf -> A geodataframe (geometry, classname, id)
+        _________
 
-        return:
+        src : rasterio.DatasetReader object
+
+        gdf : geopandas.geodataframe.GeoDataFrame object
+              Must be (geometry, classname, id(int))
+
+
+        mask_value : int
+                     pixels values that will be excluded
+
+
+        Return:
            An instance of the DataExtractor class
         """
         # Numpy array of shapely objects
