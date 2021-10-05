@@ -53,6 +53,9 @@ def write_raster(srcs, meta, fpath, mask=False):
     # context manager.
     with rasterio.Env():
 
+        if meta['driver'] != 'GTiff':
+            meta['driver'] = 'GTiff'
+
         with rasterio.open(fpath, 'w', **meta) as dst:
             for _id, src in enumerate(srcs, start=1):
                 print(f"Writing to disk src with res: {src.res}")
