@@ -10,7 +10,7 @@ import geoRpro.raster as rst
 
 
 class Workflow:
-    ACTIONS = {'RProcess', 'RMask', 'RReplace'}
+    ACTIONS = {'RProcess', 'RMask', 'RReplace', 'RStack', 'RNdvi'}
 
     def __init__(self, instructions):
         self.instructions = copy.deepcopy(instructions)
@@ -38,14 +38,14 @@ class Workflow:
 if __name__ == '__main__':
     datadir = "/home/diego/work/dev/github/test_data"
     # Opening JSON file
-    with open('driver_test.json') as json_file:
+    with open('./tests/driver_test_002.json') as json_file:
         wf_data = json.load(json_file, object_pairs_hook=OrderedDict)
 
     wf = Workflow(wf_data)
     wf.run_workflow()
 
-    scl_mask = rasterio.open(os.path.join(datadir, 'scl_mask.tif'))
-    b11_replaced = rasterio.open(os.path.join(datadir, 'b11_replaced.tif'))
+    #scl_mask = rasterio.open(os.path.join(datadir, 'scl_mask.tif'))
+    #b11_replaced = rasterio.open(os.path.join(datadir, 'b11_replaced.tif'))
 
-    scl_mask_arr, meta_scl_mask = rst.load(scl_mask)
-    b11, meta_b11 = rst.load(b11_replaced)
+    #scl_mask_arr, meta_scl_mask = rst.load(scl_mask)
+    #b11, meta_b11 = rst.load(b11_replaced)
