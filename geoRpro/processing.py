@@ -293,13 +293,13 @@ class RStack(ComposeBase):
             self.output[self.name] = fpath
         print('Done stacking...')
 
-class RNdvi(ComposeBase):
+class RIndex(ComposeBase):
 
     def __init__(self, instructions):
         super().__init__(instructions)
 
     def run(self):
-        print(f'Calculate ndvi index for {self.input[self.name]}')
+        print(f'Calculate {self.name} with {self.input[self.name]}')
         with ExitStack() as stack_files:
 
             srcs = [stack_files.enter_context(rasterio.open(v))
@@ -307,11 +307,19 @@ class RNdvi(ComposeBase):
             self.output = {self.name: srcs}
             self._check_metadata()
             index = rst.Indexes(self.metadata)
-            arr, meta = index.ndvi(srcs[0], srcs[1])
+            if self.name == 'ndvi':
+                arr, meta = index.ndvi(srcs[0], srcs[1])
+            elif self.name == 'nbr':
+                arr, meta = index.nbr(srcs[0], srcs[1])
+            elif self.name == 'bsi':
+                arr, meta = index.nbr(srcs[0], srcs[1], srcs[2], srcs[3])
+            elif self.name == 'ndwi':
+                arr, meta = index.nbr(srcs[0], srcs[1])
+
             fpath = os.path.join(self.data_dir, self.name + '.tif')
             io.write_array_as_raster(arr, meta, fpath)
             self.output[self.name] = fpath
-        print('Done calculating ndvi...')
+        print('Done calculating self.name...')
 
 if __name__ == '__main__':
 

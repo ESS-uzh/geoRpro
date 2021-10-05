@@ -19,7 +19,7 @@
       "Data_Dir": "/home/diego/work/dev/github/test_data",
       "Mask": [3, 7, 8, 9, 10]
   },
-  "RNdvi":  { 
+  "RIndex":  { 
       "Input": {
           "ndvi": ["b02.tif", "b04.tif"]
       },
