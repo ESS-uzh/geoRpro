@@ -312,9 +312,9 @@ class RIndex(ComposeBase):
             elif self.name == 'nbr':
                 arr, meta = index.nbr(srcs[0], srcs[1])
             elif self.name == 'bsi':
-                arr, meta = index.nbr(srcs[0], srcs[1], srcs[2], srcs[3])
+                arr, meta = index.bsi(srcs[0], srcs[1], srcs[2], srcs[3])
             elif self.name == 'ndwi':
-                arr, meta = index.nbr(srcs[0], srcs[1])
+                arr, meta = index.ndwi(srcs[0], srcs[1])
 
             fpath = os.path.join(self.data_dir, self.name + '.tif')
             io.write_array_as_raster(arr, meta, fpath)
