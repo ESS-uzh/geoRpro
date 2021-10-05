@@ -171,3 +171,107 @@ def apply_mask(arr, mask, fill_value=0):
     # Fill masked vales with fill_value
     arr_filled = np.ma.filled(masked_arr, fill_value=fill_value)
     return arr_filled
+
+class Indexes:
+    """
+    Provide methods to calculate different raster indexes
+
+    Attributes
+    ----------
+
+     metadata: dict
+                profile information associated with one of the raster
+                used to calculate the indexes
+
+     scale_factor: int (default:1000)
+               Calculated indexes array are scaled for one of those facors:
+               1 -> Return a float array
+               1000 -> Return an int array
+    """
+
+    def __init__(self, metadata, scale_factor=1000):
+
+        self.metadata = metadata
+        self.scale_factor = scale_factor
+
+    @property
+    def scale_factor(self):
+        return self._scale_factor
+
+
+    @scale_factor.setter
+    def scale_factor(self, value):
+        if value == 1000:
+            self.metadata.update({
+            'driver': 'GTiff',
+            'count': 1})
+        elif value == 1:
+            self.metadata.update({
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1})
+        else:
+            raise ValueError("Allowed scale factors are: 1 or 1000")
+        self._scale_factor = value
+
+
+    def _scale_and_round(self, arr):
+        array = arr * self.scale_factor
+        if self.scale_factor == 1000:
+            array = array.astype(int)
+        return array, self.metadata
+
+
+    def ndvi(self, red_src, nir_src):
+        # to do: check for rasters to be (1, width, height)
+        redB = red_src.read()
+        nirB = nir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        ndvi = (nirB.astype(np.float32)-redB.astype(np.float32))/ \
+                   (nirB.astype(np.float32)+redB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(ndvi)
+        ndvi[where_are_NaNs] = 0
+
+        return self._scale_and_round(ndvi)
+
+
+    def nbr(self, nir_src, swir_src):
+        """ Normalized Burn Ratio """
+        nirB = nir_src.read()
+        swirB = swir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        nbr = (nirB.astype(np.float32)-swirB.astype(np.float32))/ \
+                   (nirB.astype(np.float32)+swirB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(nbr)
+        nbr[where_are_NaNs] = 0
+        return self._scale_and_round(nbr)
+
+
+    def bsi(self, blue_src, red_src, nir_src, swir_src):
+        """ Bare Soil Index (BSI) """
+        blueB = blue_src.read()
+        redB = red_src.read()
+        nirB = nir_src.read()
+        swirB = swir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        bsi = ((swirB.astype(np.float32)+redB.astype(np.float32))-(nirB.astype(np.float32)+blueB.astype(np.float32))) / \
+            ((swirB.astype(np.float32)+redB.astype(np.float32))+(nirB.astype(np.float32)+blueB.astype(np.float32)))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(bsi)
+        bsi[where_are_NaNs] = 0
+        return self._scale_and_round(bsi)
+
+
+    def ndwi(self, green_src, nir_src):
+        """ Normalized Difference Water Index (NDWI)  """
+        greenB = green_src.read()
+        nirB = nir_src.read()
+        np.seterr(divide='ignore', invalid='ignore')
+        ndwi = (greenB.astype(np.float32)-nirB.astype(np.float32))/ \
+                   (greenB.astype(np.float32)+nirB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(ndwi)
+        ndwi[where_are_NaNs] = 0
+        return self._scale_and_round(ndwi)
