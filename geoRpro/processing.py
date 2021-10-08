@@ -10,6 +10,7 @@ from contextlib import ExitStack
 
 import numpy as np
 import rasterio
+import geopandas as gpd
 from rasterio.mask import mask
 from rasterio.windows import Window
 from rasterio.warp import Resampling
@@ -36,9 +37,24 @@ class ProcessBase:
         self._parse_instructions()
         self._get_fpaths()
         self.res = None
-        self.polygon = None
+        self._polygon = None
         self.window = None
         self.layer = None
+
+    @property
+    def polygon(self):
+        return self._polygon
+
+    @polygon.setter
+    def polygon(self, poly_param):
+
+        shape_file = poly_param[0]
+        crs = poly_param[1]
+        index = poly_param[2]
+
+        gdf = gpd.read_file(shape_file)
+        gdf = gdf.to_crs(f"EPSG:{crs}")
+        self._polygon = gdf['geometry'][index]
 
     def _parse_instructions(self):
         for k, _ in self.instructions.items():
@@ -62,8 +78,9 @@ class ProcessBase:
             ## NOte: Values inserted in data should be checked, property ?!
             self.res = self.pre_process.get('Res')
             self.polygon = self.pre_process.get('Polygon')
+            self.window = self.pre_process.get('Window')
             if self.window:
-                self.window = tuple(self.pre_process.get('Window'))
+                self.window = tuple(self.window)
             self.layer = self.pre_process.get('Layer')
 
     def pre_process_run(self):
@@ -98,6 +115,10 @@ class ProcessBase:
                         print(f'Selected a window: {self.window} as AOI')
                         arr, meta = rst.load(src, window=self.window)
                         src = stack_action.enter_context(io.to_src(arr, meta))
+
+                    if not os.path.exists(self.data_dir):
+                        print(f'Creating {self.data_dir}')
+                        os.makedirs(self.data_dir)
 
                     fpath = os.path.join(self.data_dir, name + '.tif')
                     io.write_raster([src], src.profile, fpath)
@@ -324,40 +345,62 @@ class RIndex(ComposeBase):
 if __name__ == '__main__':
 
     ORIGIN = '/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA'
+    SHAPES = '/home/diego/work/dev/data/test_data/StudyVillages_Big/StudyVillages_Big.shp'
     DATADIR = '/home/diego/work/dev/github/test_data'
     WINDOW = ((10970, 10980), (5025, 5040)) # (row, col)
     RES = 10
+    s20 = Sentinel2(os.path.join(ORIGIN, 'R20m'))
+    import geopandas as gpd
+    with rasterio.open(s20.get_fpaths('TCI_20m')[0]) as ras_tci:
+        gdf_polys = gpd.read_file(SHAPES)
+        gdf_polys = gdf_polys.to_crs(f"EPSG:{ras_tci.crs.to_epsg()}")
 
-    pr1_instructions = {'Inputs': {'scl': 'SCL_20m', 'b11': 'B11_20m'},
-                        'Pre_Process': {'Res': RES},
-                        'Data_Dir': DATADIR,
-                        'Satellite': 'Sentinel2',
-                        'Sat_Dir': ORIGIN}
-
-    mask1_instructions = {'Inputs': {'scl_mask': 'scl.tif'},
-                          'Data_Dir': DATADIR,
-                          'Mask': (3, 7, 8, 9, 10)}
-
-    replace1_instructions = {'Inputs': {'b11_replaced': 'b11.tif'},
-                             'Data_Dir': DATADIR,
-                             'Replace': ('scl_mask.tif', 9999)}
+    for i in range(3):
+        pr1_instructions = {'Inputs': {'scl': 'SCL_20m', 'b02': 'B02_10m', 'b04': 'B04_10m'},
+                            'Pre_Process': {'Res': RES,
+                                            'Polygon': gdf_polys['geometry'][i]},
+                            'Data_Dir': DATADIR+str(i),
+                            'Satellite': 'Sentinel2',
+                            'Sat_Dir': ORIGIN}
 
 
-    pr1 = RProcess(pr1_instructions)
-    mask1 = RMask(mask1_instructions)
-    replace1 = RReplace(replace1_instructions)
-    pr1.run()
-    mask1.run()
-    replace1.run()
+        pr = RProcess(pr1_instructions)
+        pr.run()
+        print(pr.outputs)
 
-    scl = rasterio.open(pr1.outputs['scl'])
-    scl_mask = rasterio.open(mask1.outputs['scl_mask'])
-    b11_replaced = rasterio.open(replace1.outputs['b11_replaced'])
+    #mask1_instructions = {'Inputs': {'scl_mask': 'scl.tif'},
+    #                      'Data_Dir': DATADIR,
+    #                      'Mask': (3, 7, 8, 9, 10)}
 
-    scl_arr, meta_scl = rst.load(scl)
-    scl_mask_arr, meta_scl_mask = rst.load(scl_mask)
-    b11, meta_b11 = rst.load(b11_replaced)
+    #replace1_instructions = {'Inputs': {'b11_replaced': 'b11.tif'},
+    #                         'Data_Dir': DATADIR,
+    #                         'Replace': ('scl_mask.tif', 9999)}
 
-#
-#class RIndex(Task):
-#    pass
+    ## Create TCI images from polys ##########
+    #with rasterio.open(s20.get_fpaths('TCI_20m')[0]) as ras_tci:
+    #    import geopandas as gpd
+    #    pdb.set_trace()
+    #    gdf_polys = gpd.read_file(SHAPES)
+    #    gdf_polys = gdf_polys.to_crs(f"EPSG:{ras_tci.crs.to_epsg()}")
+    #    for idx, row in gdf_polys.iterrows():
+    #        shapely.row['geometry']
+        #    # get the AOI over TCI and save to disk
+        #    arr_tci, meta_tci = rst.load_polygon(ras_tci, row['geometry'])
+        #    fname_tci = "_".join([s20.get_tile_number("TCI_20m"), s20.get_datetake("TCI_20m")])+f"_AOI_{idx}.tif"
+        #    io.write_array_as_raster(arr_tci, meta_tci, os.path.join(OUTDIR, fname_tci))
+
+
+    #pr1 = RProcess(pr1_instructions)
+    #mask1 = RMask(mask1_instructions)
+    #replace1 = RReplace(replace1_instructions)
+    #pr1.run()
+    #mask1.run()
+    #replace1.run()
+
+    #scl = rasterio.open(pr1.outputs['scl'])
+    #scl_mask = rasterio.open(mask1.outputs['scl_mask'])
+    #b11_replaced = rasterio.open(replace1.outputs['b11_replaced'])
+
+    #scl_arr, meta_scl = rst.load(scl)
+    #scl_mask_arr, meta_scl_mask = rst.load(scl_mask)
+    #b11, meta_b11 = rst.load(b11_replaced)

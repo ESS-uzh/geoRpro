@@ -6,7 +6,9 @@
           "b04": "B04_10m"
       },
       "Pre_Process": {
-          "Res": 10
+          "Res": 10,
+          "Polygon": ["/home/diego/work/dev/github/test_data/StudyVillages_Big/StudyVillages_Big.shp",
+                      "32737", 0]
       },
       "Data_Dir": "/home/diego/work/dev/github/test_data",
       "Satellite": "Sentinel2",
