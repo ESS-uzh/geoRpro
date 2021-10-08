@@ -110,8 +110,33 @@ def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
                    resampling=method)
     return arr, meta
 
-def load_polygon():
-    pass
+def load_polygon(src, geom, crop=True):
+    """
+    Load a raster array from an input shape
+
+    params:
+    --------
+
+        src : rasterio.DatasetReader object
+
+        geom : GEOJson-like dict
+               input shape, e.g. { 'type': 'Polygon', 'coordinates': [[(),(),(),()]] }
+
+        crop : bool (dafault:True)
+               Whether to crop the raster to the extent of the shapes
+
+    return:
+
+        tuple: array, metadata
+    """
+    arr, out_transform = rasterio.mask.mask(src, [geom], crop=crop)
+    metadata = src.profile
+    metadata.update({
+        "driver": "GTiff",
+        "height": arr.shape[1],
+        "width": arr.shape[2],
+        "transform": out_transform})
+    return arr, metadata
 
 def mask_vals(arr, meta, vals):
     """
@@ -204,6 +229,7 @@ class Indexes:
         if value == 1000:
             self.metadata.update({
             'driver': 'GTiff',
+            'dtype': 'int32',
             'count': 1})
         elif value == 1:
             self.metadata.update({
@@ -218,7 +244,7 @@ class Indexes:
     def _scale_and_round(self, arr):
         array = arr * self.scale_factor
         if self.scale_factor == 1000:
-            array = array.astype(int)
+            array = array.astype(np.int32)
         return array, self.metadata
 
 
