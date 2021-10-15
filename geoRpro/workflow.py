@@ -10,7 +10,8 @@ import geoRpro.raster as rst
 
 
 class Workflow:
-    ACTIONS = {'RProcess', 'RMask', 'RReplace', 'RStack', 'RIndex'}
+    ACTIONS = {'RProcess', 'RMask', 'RReplace', 'RStack', 'RI_ndvi',
+               'RI_nbr', 'RI_bsi', 'RI_ndwi'}
 
     def __init__(self, instructions):
         self.instructions = copy.deepcopy(instructions)

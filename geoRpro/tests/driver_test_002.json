@@ -2,13 +2,21 @@
   "RProcess":  { 
       "Inputs": {
           "scl": "SCL_20m", 
-          "b02": "B02_10m",
-          "b04": "B04_10m"
+          "b02": "B02_20m",
+          "b03": "B03_20m",
+          "b04": "B04_20m",
+          "b05": "B05_20m",
+          "b06": "B06_20m",
+          "b07": "B07_20m",
+          "b08": "B08_10m",
+          "b8A": "B8A_20m",
+          "b11": "B11_20m",
+          "b12": "B12_20m"
       },
       "Pre_Process": {
-          "Res": 10,
+          "Res": 20,
           "Polygon": ["/home/diego/work/dev/github/test_data/StudyVillages_Big/StudyVillages_Big.shp",
-                      "32737", 0]
+                      "32737", 1]
       },
       "Data_Dir": "/home/diego/work/dev/github/test_data",
       "Satellite": "Sentinel2",
@@ -21,24 +29,55 @@
       "Data_Dir": "/home/diego/work/dev/github/test_data",
       "Mask": [3, 7, 8, 9, 10]
   },
-  "RIndex":  { 
+  "RI_ndvi":  { 
       "Input": {
           "ndvi": ["b02.tif", "b04.tif"]
+      },
+      "Data_Dir": "/home/diego/work/dev/github/test_data"
+  },
+  "RI_nbr":  { 
+      "Input": {
+          "nbr": ["b08.tif", "b12.tif"]
+      },
+      "Data_Dir": "/home/diego/work/dev/github/test_data"
+  },
+  "RI_bsi":  { 
+      "Input": {
+          "bsi": ["b02.tif", "b11.tif", "b08.tif", "b12.tif"]
+      },
+      "Data_Dir": "/home/diego/work/dev/github/test_data"
+  },
+  "RI_ndwi":  { 
+      "Input": {
+          "ndwi": ["b03.tif", "b08.tif"]
       },
       "Data_Dir": "/home/diego/work/dev/github/test_data"
   },
   "RReplace": {
       "Inputs": {
           "b02": "b02.tif",
+          "b03": "b03.tif",
           "b04": "b04.tif",
-          "ndvi": "ndvi.tif"
+          "b05": "b05.tif",
+          "b06": "b06.tif",
+          "b07": "b07.tif",
+          "b08": "b08.tif",
+          "b8A": "b8A.tif",
+          "b11": "b11.tif",
+          "b12": "b12.tif",
+          "ndvi": "ndvi.tif",
+          "nbr": "nbr.tif",
+          "bsi": "bsi.tif",
+          "ndwi": "ndwi.tif"
       },
       "Data_Dir": "/home/diego/work/dev/github/test_data",
       "Replace": ["scl_mask.tif", 9999]
   },
   "RStack": {
       "Input": {
-          "stack": ["b02.tif", "b04.tif", "ndvi.tif"]
+          "stack": ["b02.tif", "b03.tif", "b04.tif", "b05.tif",
+              "b06.tif", "b07.tif", "b08.tif", "b8A.tif", "b11.tif",
+              "b12.tif", "ndvi.tif", "nbr.tif", "bsi.tif", "ndwi.tif"]
       },
       "Data_Dir": "/home/diego/work/dev/github/test_data"
   }
