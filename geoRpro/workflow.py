@@ -5,7 +5,6 @@ from collections import OrderedDict
 import pdb
 
 import rasterio
-import geoRpro.raster as rst
 
 
 
@@ -37,16 +36,20 @@ class Workflow:
 
 
 if __name__ == '__main__':
-    datadir = "/home/diego/work/dev/github/test_data"
+
+
+    #### --- Use ./test/driver_test_002.json to drive workflow --- ###
+    #### --- Steps:
+    #### --- RProcess -> prepare raster data (same spatial res, same AOI etc..)
+    #### --- RMask -> create a boolean raster mask (True to be masked , False not)
+    #### --- RI_ndivi etc -> Calc indexes -> ndvi, etc..
+    #### --- RReplace -> Use mask bool raster to replace the pixel values of
+    ####       other raster with 9999 at the True position
+    #### --- RStack -> stack up all the rasters
+
     # Opening JSON file
     with open('./tests/driver_test_002.json') as json_file:
         wf_data = json.load(json_file, object_pairs_hook=OrderedDict)
 
     wf = Workflow(wf_data)
     wf.run_workflow()
-
-    #scl_mask = rasterio.open(os.path.join(datadir, 'scl_mask.tif'))
-    #b11_replaced = rasterio.open(os.path.join(datadir, 'b11_replaced.tif'))
-
-    #scl_mask_arr, meta_scl_mask = rst.load(scl_mask)
-    #b11, meta_b11 = rst.load(b11_replaced)
