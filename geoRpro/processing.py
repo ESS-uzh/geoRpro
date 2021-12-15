@@ -1,22 +1,14 @@
 import os
-import sys
 import copy
-import math
-import json
 import logging
-import collections
-from contextlib import contextmanager
 from contextlib import ExitStack
 
-import numpy as np
 import rasterio
 import geopandas as gpd
-from rasterio.mask import mask
-from rasterio.windows import Window
-from rasterio.warp import Resampling
 from geoRpro.sent2 import Sentinel2
 import geoRpro.raster as rst
 import geoRpro.io as io
+from geoRpro.base_processing import ProcessBase
 
 import pdb
 
@@ -24,22 +16,57 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class ProcessBase:
-    SATELLITES = 'Sentinel2'
-    INSTRUCTIONS = {'Inputs', 'Pre_Process', 'Data_Dir', 'Satellite', 'Sat_Dir'}
-    PREPROCESS = {'Res', 'Window', 'Polygon', 'Layer'}
+class RPrepro(ProcessBase):
+    """
+    Pre-processing of georaster
+
+    Attributes
+    ----------
+
+    instructions: dict
+                  List of attributes necessary to create an
+                  instance of the class and to the run main method (self.run)
+                  Required and optional attributes are specified in the
+                  INSTRUCTIONS class attribute
+
+    res: int
+         Spacial resolution that applies to geo-rasters
+
+    polygon: list (opt)
+             Extract a polygon from a geo-raster
+
+             Eg. ['*.shp', 'crs', index]
+
+             shp: str
+                  Full path to the shape file
+
+             crs: str
+                  Coord ref sys of the geo-raster from which the polygon will be
+                  extracted
+             index: int
+                    Specify a polygon if the shp file contains multiple polygons
+
+    window: list (opt)
+            Extract a window from a georaster
+            Eg. [(0, 5), (0, 10)] # 5 first rows, 10 first columns
+
+
+    layer: int (opt)
+           Extract a layer from a geo-raster
+
+
+    """
+
+    INSTRUCTIONS = {'Inputs', 'Indir', 'Outdir', 'Satellite',
+                    'Res', 'Polygon', 'Window', 'Layer'}
 
     def __init__(self, instructions):
-
-        self.instructions = copy.deepcopy(instructions)
-        self.inputs = {}
-        self.outputs = {}
-        self._parse_instructions()
-        self._get_fpaths()
+        super().__init__(instructions)
         self.res = None
         self._polygon = None
         self.window = None
         self.layer = None
+        self._parse_args()
 
     @property
     def polygon(self):
@@ -56,36 +83,18 @@ class ProcessBase:
         gdf = gdf.to_crs(f"EPSG:{crs}")
         self._polygon = gdf['geometry'][index]
 
-    def _parse_instructions(self):
-        for k, _ in self.instructions.items():
+    def _parse_args(self):
+        ## NOte: Values inserted in data should be checked, property ?!
+        self.res = self.instructions.get('Res')
+        if self.instructions.get('Polygon'):
+            self.polygon = self.instructions.get('Polygon')
+        if self.instructions.get('Window'):
+            self.window = tuple(self.instructions.get('Window'))
+        self.layer = self.instructions.get('Layer')
 
-            if k not in self.INSTRUCTIONS:
-                raise ValueError(f'{k} is not a valid argument')
-
-            ## NOte: Values inserted in data should be checked, property ?!
-            self.inputs = self.instructions.get('Inputs')
-            self.pre_process = self.instructions.get('Pre_Process')
-            self.data_dir = self.instructions.get('Data_Dir')
-            self.satellite = self.instructions.get('Satellite')
-            self.sat_dir = self.instructions.get('Sat_Dir')
-
-    def _parse_pre_process(self):
-        for k, _ in self.pre_process.items():
-
-            if k not in self.PREPROCESS:
-                raise ValueError(f'{k} is not a valid argument')
-
-            ## NOte: Values inserted in data should be checked, property ?!
-            self.res = self.pre_process.get('Res')
-            self.polygon = self.pre_process.get('Polygon')
-            self.window = self.pre_process.get('Window')
-            if self.window:
-                self.window = tuple(self.window)
-            self.layer = self.pre_process.get('Layer')
-
-    def pre_process_run(self):
-        self._parse_pre_process()
+    def run(self):
         with ExitStack() as stack_files:
+
             self.outputs = {k:stack_files.enter_context(rasterio.open(v))
                             for (k, v) in self.inputs.items()}
 
@@ -107,7 +116,7 @@ class ProcessBase:
                         src = stack_action.enter_context(io.to_src(arr, meta))
 
                     if self.polygon:
-                        print(f"Selected a polygon as AOI")
+                        print('Selected a polygon as AOI')
                         arr, meta = rst.load_polygon(src, self.polygon)
                         src = stack_action.enter_context(io.to_src(arr, meta))
 
@@ -116,141 +125,39 @@ class ProcessBase:
                         arr, meta = rst.load(src, window=self.window)
                         src = stack_action.enter_context(io.to_src(arr, meta))
 
-                    if not os.path.exists(self.data_dir):
-                        print(f'Creating {self.data_dir}')
-                        os.makedirs(self.data_dir)
+                    outdir = self._create_outdir()
 
-                    fpath = os.path.join(self.data_dir, name + '.tif')
+                    fpath = os.path.join(outdir, name + '.tif')
                     io.write_raster([src], src.profile, fpath)
                     self.outputs[name] = fpath
 
-    def _get_fpaths(self):
-
-        # mapping band with fpath using Sentinel2
-        if self.satellite == 'Sentinel2' and self.sat_dir:
-
-            s10 = Sentinel2(os.path.join(self.sat_dir, 'R10m'))
-            s20 = Sentinel2(os.path.join(self.sat_dir, 'R20m'))
-            s60 = Sentinel2(os.path.join(self.sat_dir, 'R60m'))
-
-            for name, band_name in self.inputs.items():
-                try:
-                    self.inputs[name] = s10.get_fpath(band_name)
-                except KeyError:
-                    try:
-                        self.inputs[name] = s20.get_fpath(band_name)
-                    except KeyError:
-                        try:
-                            self.inputs[name] = s60.get_fpath(band_name)
-                        except KeyError:
-                            raise ValueError(f"Cannot find band: '{band_name}'. Please \
-                                    provide valid Sentinel2 band name.")
-
-        # mapping band with fpath using fname
-        elif self.data_dir:
-            for name, file_name in self.inputs.items():
-                self.inputs[name] = os.path.join(self.data_dir, file_name)
-
-    def run(self):
-        pass
-
-
-class ComposeBase:
-    INSTRUCTIONS = {'Input', 'Data_Dir', 'Satellite', 'Sat_Dir'}
-
-    def __init__(self, instructions):
-        self.instructions = copy.deepcopy(instructions)
-        self.input = {}
-        self.output = {}
-        self._parse_instructions()
-        self._get_fpaths()
-        self.metadata = None
-
-    def _parse_instructions(self):
-
-        for k, _ in self.instructions.items():
-
-            if k not in self.INSTRUCTIONS:
-                raise ValueError(f'{k} is not a valid argument')
-
-            ## NOte: Values inserted in data should be checked, property ?!
-            self.input = self.instructions.get('Input')
-            self.name = list(self.input.keys())[0]
-            self.data_dir = self.instructions.get('Data_Dir')
-            self.satellite = self.instructions.get('Satellite')
-            self.sat_dir = self.instructions.get('Sat_Dir')
-
-
-    def _get_fpaths(self):
-        # mapping band with fpath using Sentinel2
-        if self.satellite == 'Sentinel2' and self.sat_dir:
-            s10 = Sentinel2(os.path.join(self.sat_dir, 'R10m'))
-            s20 = Sentinel2(os.path.join(self.sat_dir, 'R20m'))
-            s60 = Sentinel2(os.path.join(self.sat_dir, 'R60m'))
-
-            for idx, band_name in enumerate(self.input[self.name]):
-                try:
-                    self.input[self.name][idx] = s10.get_fpath(band_name)
-                except KeyError:
-                    try:
-                        self.input[self.name][idx] = s20.get_fpath(band_name)
-                    except KeyError:
-                        try:
-                            self.input[self.name][idx] = s60.get_fpath(band_name)
-                        except KeyError:
-                            raise ValueError(f"Cannot find band: '{band_name}'. Please \
-                                    provide valid Sentinel2 band name.")
-        # mapping band with fpath using fname
-        elif self.data_dir:
-            for idx, file_name in enumerate(self.input[self.name]):
-                self.input[self.name][idx] = os.path.join(self.data_dir, file_name)
-
-
-    def _check_metadata(self):
-        if self.output:
-            test_src = self.output[self.name][0]
-            end_srcs = self.output[self.name][1:]
-        for src in end_srcs:
-            if src.crs.to_epsg() != test_src.crs.to_epsg():
-                raise ValueError('Raster data must have the same CRS')
-            if src.width != test_src.width or src.height != test_src.height:
-                raise ValueError('Raster data must have the same size')
-            if src.res != test_src.res:
-                raise ValueError('Raster data must have the same spacial resolution')
-            self.metadata = test_src.profile
-            self.metadata.update(driver='GTiff')
-
-    def run(self):
-        pass
-
-
-class RProcess(ProcessBase):
-
-    def __init__(self, instructions):
-        super().__init__(instructions)
-
-    def run(self):
-        if self.pre_process:
-            print(f'Start pre-processing for: {list(self.inputs.keys())}')
-            self.pre_process_run()
-        print('Done pre-processing...')
-
 
 class RMask(ProcessBase):
-    INSTRUCTIONS = ProcessBase.INSTRUCTIONS
-    INSTRUCTIONS.add('Mask')
+    """
+    Create a boolean (0, 1) mask geo-raster
+
+    Attributes
+    ----------
+
+    instructions: dict
+                  List of attributes necessary to create an
+                  instance of the class and to the run main method (self.run)
+                  Required and optional attributes are specified in the
+                  INSTRUCTIONS class attribute
+
+    values: list
+            Pixel values of the input rasters equal to *values* will be converted to 1
+            the rest will be converted to 0
+
+
+    """
+    INSTRUCTIONS = {'Inputs', 'Indir', 'Outdir', 'Satellite', 'Values'}
 
     def __init__(self, instructions):
         super().__init__(instructions)
-        self.mask_val = self.instructions.get('Mask')
+        self.mask_val = self.instructions.get('Values')
 
     def run(self):
-        if self.pre_process:
-            print('Pre-processing ...')
-            self.pre_process_run()
-            print('Done')
-            self.inputs = self.outputs
-            self.outputs = {}
         with ExitStack() as stack_files:
             self.outputs = {k:stack_files.enter_context(rasterio.open(v))
                             for (k, v) in self.inputs.items()}
@@ -259,200 +166,220 @@ class RMask(ProcessBase):
                 print(f'Masking: {name}')
                 arr, meta = rst.load(src)
                 arr_mask, meta_mask = rst.mask_vals(arr, meta, self.mask_val)
-                fpath = os.path.join(self.data_dir, name + '.tif')
+
+                outdir = self._create_outdir()
+
+                fpath = os.path.join(outdir, name + '.tif')
                 io.write_array_as_raster(arr_mask.mask, meta_mask, fpath)
                 self.outputs[name] = fpath
 
 
 class RReplace(ProcessBase):
-    INSTRUCTIONS = ProcessBase.INSTRUCTIONS
-    INSTRUCTIONS.add('Replace')
+    """
+    Create a geo-raster with new values at locations where a mask geo-raster
+    is equal to 1
+
+    Attributes
+    ----------
+
+    instructions: dict
+                  List of attributes necessary to create an
+                  instance of the class and to the run main method (self.run)
+                  Required and optional attributes are specified in the
+                  INSTRUCTIONS class attribute
+
+    replace: list
+             Extract a polygon from a geo-raster
+
+             Eg. ['*.tif', fill_value]
+
+             .tif: str
+                   Full path to a mask geo-raster
+
+             fill_value: int
+                   Value that will be used to fill the masked positions
+
+
+    """
+    INSTRUCTIONS = {'Inputs', 'Indir', 'Outdir', 'Satellite', 'Replace'}
 
     def __init__(self, instructions):
         super().__init__(instructions)
-        self.replace = self.instructions.get('Replace')
+        self.fpath_mask, self.value = self.instructions.get('Replace')
 
     def run(self):
-        if self.pre_process:
-            print('Pre-processing ...')
-            self.pre_process_run()
-            print('Done')
-            self.inputs = self.outputs
-            self.outputs = {}
         with ExitStack() as stack_files:
             self.outputs = {k:stack_files.enter_context(rasterio.open(v))
                             for (k, v) in self.inputs.items()}
+            src_mask = stack_files.enter_context(rasterio.open(os.path.join(self.indir,
+                                                                            self.fpath_mask)))
+            mask, _ = rst.load(src_mask)
 
             for name, src in self.outputs.items():
-                print(f"Replace values at mask array position")
-                # check that mask and array are the same dimension
+                print(f"Replace values with {self.value} at mask array position")
                 arr, meta = rst.load(src)
-                with rasterio.open(os.path.join(self.data_dir, self.replace[0])) as src_mask:
-                    mask, _ = rst.load(src_mask)
-                    assert mask.shape == arr.shape, 'Array and mask must the have same shape'
-                    arr_replaced = rst.apply_mask(arr, mask, fill_value=self.replace[1])
-                fpath = os.path.join(self.data_dir, name + '.tif')
+                assert mask.shape == arr.shape, 'Array and mask must the have same shape'
+                arr_replaced = rst.apply_mask(arr, mask, fill_value=self.value)
+
+                outdir = self._create_outdir()
+
+                fpath = os.path.join(outdir, name + '.tif')
                 io.write_array_as_raster(arr_replaced, meta, fpath)
                 self.outputs[name] = fpath
 
-class RStack(ComposeBase):
+
+class RStack(ProcessBase):
+    INSTRUCTIONS = {'Inputs', 'Indir', 'Outdir', 'Satellite', 'Dtype'}
 
     def __init__(self, instructions):
         super().__init__(instructions)
+        self.dtype = self.instructions.get('Dtype', 'int32')
+
+    def _check_metadata(self, srcs):
+        test_src = srcs[0]
+        end_srcs = srcs[1:]
+
+        for src in end_srcs:
+            if src.crs.to_epsg() != test_src.crs.to_epsg():
+                raise ValueError('Raster data must have the same CRS')
+            if src.width != test_src.width or src.height != test_src.height:
+                raise ValueError('Raster data must have the same size')
+            if src.res != test_src.res:
+                raise ValueError('Raster data must have the same spacial resolution')
 
     def run(self):
-        print(f'Start stack procedure for {self.input[self.name]}')
+        self.outputs = {}
         with ExitStack() as stack_files:
+            for name, values in self.inputs.items():
+                print(f'Start stack procedure for {name}')
+                srcs = [stack_files.enter_context(rasterio.open(v))
+                        for v in values]
+                self._check_metadata(srcs)
+                self.outputs[name] = srcs
+                metadata = srcs[0].profile
+                metadata.update(driver='GTiff')
+                metadata.update(count=len(self.outputs[name]))
+                metadata.update(dtype=self.dtype)
 
-            srcs = [stack_files.enter_context(rasterio.open(v))
-                    for v in self.input[self.name]]
-            self.output = {self.name: srcs}
-            self._check_metadata()
-            self.metadata.update(count=len(self.output[self.name]))
-            fpath = os.path.join(self.data_dir, self.name + '.tif')
-            io.write_raster(srcs, self.metadata, fpath)
-            self.output[self.name] = fpath
-        print('Done stacking...')
+                outdir = self._create_outdir()
 
-class RI_ndvi(ComposeBase):
+                fpath = os.path.join(outdir, name + '.tif')
+                io.write_raster(srcs, metadata, fpath)
+                self.outputs[name] = fpath
+
+
+class RIndex(ProcessBase):
+    INSTRUCTIONS = {'Inputs', 'Indir', 'Outdir', 'Satellite', 'Scale'}
 
     def __init__(self, instructions):
         super().__init__(instructions)
+        self.scale_factor = self.instructions.get('Scale', 1000)
+
+    def _check_metadata(self, srcs):
+        test_src = srcs[0]
+        end_srcs = srcs[1:]
+
+        for src in end_srcs:
+            if src.crs.to_epsg() != test_src.crs.to_epsg():
+                raise ValueError('Raster data must have the same CRS')
+            if src.width != test_src.width or src.height != test_src.height:
+                raise ValueError('Raster data must have the same size')
+            if src.res != test_src.res:
+                raise ValueError('Raster data must have the same spacial resolution')
+
+    def calc_index(self, name, metadata, scale):
+        index = rst.Indexes(metadata, scale)
+        if name == 'ndvi':
+            return index.ndvi
+        if name == 'nbr':
+            return index.nbr
+        if name == 'bsi':
+            return index.bsi
+        if name == 'ndwi':
+            return index.ndwi
+        raise ValueError(f'Index {name} does not exist')
 
     def run(self):
-        print(f'Calculate {self.name} with {self.input[self.name]}')
+        self.outputs = {}
         with ExitStack() as stack_files:
+            for name, values in self.inputs.items():
+                print(f'Calculating {name}')
+                srcs = [stack_files.enter_context(rasterio.open(v))
+                        for v in values]
+                self._check_metadata(srcs)
+                self.outputs[name] = srcs
+                metadata_index = srcs[0].profile
+                metadata_index.update(driver='GTiff')
 
-            srcs = [stack_files.enter_context(rasterio.open(v))
-                    for v in self.input[self.name]]
-            self.output = {self.name: srcs}
-            self._check_metadata()
-            index = rst.Indexes(self.metadata)
-            arr, meta = index.ndvi(srcs[0], srcs[1])
-            fpath = os.path.join(self.data_dir, self.name + '.tif')
-            io.write_array_as_raster(arr, meta, fpath)
-            self.output[self.name] = fpath
-            print(f'Done calculating {self.name}...')
+                index = self.calc_index(name, metadata_index, scale=self.scale_factor)
+                arr, meta = index(*srcs)
 
-class RI_nbr(ComposeBase):
+                outdir = self._create_outdir()
 
-    def __init__(self, instructions):
-        super().__init__(instructions)
+                fpath = os.path.join(outdir, name + '.tif')
+                io.write_array_as_raster(arr, meta, fpath)
+                self.outputs[name] = fpath
 
-    def run(self):
-        print(f'Calculate {self.name} with {self.input[self.name]}')
-        with ExitStack() as stack_files:
-
-            srcs = [stack_files.enter_context(rasterio.open(v))
-                    for v in self.input[self.name]]
-            self.output = {self.name: srcs}
-            self._check_metadata()
-            index = rst.Indexes(self.metadata)
-            arr, meta = index.nbr(srcs[0], srcs[1])
-            fpath = os.path.join(self.data_dir, self.name + '.tif')
-            io.write_array_as_raster(arr, meta, fpath)
-            self.output[self.name] = fpath
-            print(f'Done calculating {self.name}...')
-
-class RI_bsi(ComposeBase):
-
-    def __init__(self, instructions):
-        super().__init__(instructions)
-
-    def run(self):
-        print(f'Calculate {self.name} with {self.input[self.name]}')
-        with ExitStack() as stack_files:
-
-            srcs = [stack_files.enter_context(rasterio.open(v))
-                    for v in self.input[self.name]]
-            self.output = {self.name: srcs}
-            self._check_metadata()
-            index = rst.Indexes(self.metadata)
-            arr, meta = index.bsi(srcs[0], srcs[1], srcs[2], srcs[3])
-            fpath = os.path.join(self.data_dir, self.name + '.tif')
-            io.write_array_as_raster(arr, meta, fpath)
-            self.output[self.name] = fpath
-            print(f'Done calculating {self.name}...')
-
-class RI_ndwi(ComposeBase):
-
-    def __init__(self, instructions):
-        super().__init__(instructions)
-
-    def run(self):
-        print(f'Calculate {self.name} with {self.input[self.name]}')
-        with ExitStack() as stack_files:
-
-            srcs = [stack_files.enter_context(rasterio.open(v))
-                    for v in self.input[self.name]]
-            self.output = {self.name: srcs}
-            self._check_metadata()
-            index = rst.Indexes(self.metadata)
-            arr, meta = index.ndwi(srcs[0], srcs[1])
-            fpath = os.path.join(self.data_dir, self.name + '.tif')
-            io.write_array_as_raster(arr, meta, fpath)
-            self.output[self.name] = fpath
-            print(f'Done calculating {self.name}...')
 
 if __name__ == '__main__':
 
     ORIGIN = '/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA'
-    SHAPES = '/home/diego/work/dev/data/test_data/StudyVillages_Big/StudyVillages_Big.shp'
-    DATADIR = '/home/diego/work/dev/github/test_data'
-    WINDOW = ((10970, 10980), (5025, 5040)) # (row, col)
-    RES = 10
-    s20 = Sentinel2(os.path.join(ORIGIN, 'R20m'))
-    import geopandas as gpd
-    with rasterio.open(s20.get_fpaths('TCI_20m')[0]) as ras_tci:
-        gdf_polys = gpd.read_file(SHAPES)
-        gdf_polys = gdf_polys.to_crs(f"EPSG:{ras_tci.crs.to_epsg()}")
+    SHAPE = "/home/diego/work/dev/github/test_data/StudyVillages_Big/StudyVillages_Big.shp"
+    DATADIR = '/home/diego/work/dev/data/test_data_out'
+    inst0 = {"Inputs": {"B02": "B02_10m",
+                        "SCL": "SCL_20m",
+                        "B04": "B04_10m",
+                        "B08": "B08_10m",
+                        "B12": "B12_20m"},
+             "Indir" : ORIGIN,
+             "Satellite" : "Sentinel2",
+             "Outdir": DATADIR,
+             #"Window": [(0, 10), (5475, 5490)],
+             'Polygon': [SHAPE, "32737", 1],
+             "Res" : 20}
 
-    for i in range(3):
-        pr1_instructions = {'Inputs': {'scl': 'SCL_20m', 'b02': 'B02_10m', 'b04': 'B04_10m'},
-                            'Pre_Process': {'Res': RES,
-                                            'Polygon': gdf_polys['geometry'][i]},
-                            'Data_Dir': DATADIR+str(i),
-                            'Satellite': 'Sentinel2',
-                            'Sat_Dir': ORIGIN}
+    inst1 = {"Inputs": {"SCL_mask": "SCL.tif",
+                       },
+             "Indir" : DATADIR,
+             #"Values" : [4]
+             "Values": [3, 7, 8, 9, 10]}
 
+    inst2 = {"Inputs": {"B02_masked": "B02.tif",
+                        "B04_masked": "B04.tif",
+                        "B08_masked": "B08.tif",
+                        "B12_masked": "B12.tif"
+                       },
+             "Indir" : DATADIR,
+             "Replace" : ['SCL_mask.tif', 9999]}
 
-        pr = RProcess(pr1_instructions)
-        pr.run()
-        print(pr.outputs)
+    inst3 = {"Inputs": {"ndvi" : ["B02_masked.tif", "B04_masked.tif"],
+                        "nbr" : ["B08_masked.tif", "B12_masked.tif"]},
+             "Scale": 1,
+             "Indir" : DATADIR}
 
-    #mask1_instructions = {'Inputs': {'scl_mask': 'scl.tif'},
-    #                      'Data_Dir': DATADIR,
-    #                      'Mask': (3, 7, 8, 9, 10)}
+    inst4 = {"Inputs": {"stack1" : ["B02_masked.tif", "B04_masked.tif", "ndvi.tif"],
+                        "stack2" : ["B08_masked.tif", "B12_masked.tif", "nbr.tif"]},
+             "Dtype" : "float32",
+             "Indir" : DATADIR}
 
-    #replace1_instructions = {'Inputs': {'b11_replaced': 'b11.tif'},
-    #                         'Data_Dir': DATADIR,
-    #                         'Replace': ('scl_mask.tif', 9999)}
+    prepro = RPrepro(inst0)
+    prepro.run()
+    maskpro = RMask(inst1)
+    maskpro.run()
+    replacepro = RReplace(inst2)
+    replacepro.run()
+    rindexpro = RIndex(inst3)
+    rindexpro.run()
+    rstackpro = RStack(inst4)
+    rstackpro.run()
 
-    ## Create TCI images from polys ##########
-    #with rasterio.open(s20.get_fpaths('TCI_20m')[0]) as ras_tci:
-    #    import geopandas as gpd
-    #    pdb.set_trace()
-    #    gdf_polys = gpd.read_file(SHAPES)
-    #    gdf_polys = gdf_polys.to_crs(f"EPSG:{ras_tci.crs.to_epsg()}")
-    #    for idx, row in gdf_polys.iterrows():
-    #        shapely.row['geometry']
-        #    # get the AOI over TCI and save to disk
-        #    arr_tci, meta_tci = rst.load_polygon(ras_tci, row['geometry'])
-        #    fname_tci = "_".join([s20.get_tile_number("TCI_20m"), s20.get_datetake("TCI_20m")])+f"_AOI_{idx}.tif"
-        #    io.write_array_as_raster(arr_tci, meta_tci, os.path.join(OUTDIR, fname_tci))
-
-
-    #pr1 = RProcess(pr1_instructions)
-    #mask1 = RMask(mask1_instructions)
-    #replace1 = RReplace(replace1_instructions)
-    #pr1.run()
-    #mask1.run()
-    #replace1.run()
-
-    #scl = rasterio.open(pr1.outputs['scl'])
-    #scl_mask = rasterio.open(mask1.outputs['scl_mask'])
-    #b11_replaced = rasterio.open(replace1.outputs['b11_replaced'])
-
-    #scl_arr, meta_scl = rst.load(scl)
-    #scl_mask_arr, meta_scl_mask = rst.load(scl_mask)
-    #b11, meta_b11 = rst.load(b11_replaced)
+    # check outputs
+    #arr_scl, meta_scl = rst.load(rasterio.open(prepro.outputs['SCL']))
+    #arr_b03, meta_b03 = rst.load(rasterio.open(prepro.outputs['B03']))
+    arr_b08, meta_b08 = rst.load(rasterio.open(prepro.outputs['B08']))
+    #arr_scl_mask, meta_scl_mask = rst.load(rasterio.open(maskpro.outputs['SCL_mask']))
+    #arr_b03_masked, meta_b03_masked = rst.load(rasterio.open(replacepro.outputs['B03_masked']))
+    arr_b08_masked, meta_b08_masked = rst.load(rasterio.open(replacepro.outputs['B08_masked']))
+    arr_ndvi, meta_ndvi = rst.load(rasterio.open(rindexpro.outputs['ndvi']))
+    arr_stack1, meta_stack1 = rst.load(rasterio.open(rstackpro.outputs['stack1']))
+    #arr_stack2, meta_stack2 = rst.load(rasterio.open(rstackpro.outputs['stack2']))

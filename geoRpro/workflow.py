@@ -9,8 +9,7 @@ import rasterio
 
 
 class Workflow:
-    ACTIONS = {'RProcess', 'RMask', 'RReplace', 'RStack', 'RI_ndvi',
-               'RI_nbr', 'RI_bsi', 'RI_ndwi'}
+    ACTIONS = {'RPrepro', 'RMask', 'RReplace', 'RStack', 'RIndex'}
 
     def __init__(self, instructions):
         self.instructions = copy.deepcopy(instructions)
@@ -38,7 +37,7 @@ class Workflow:
 if __name__ == '__main__':
 
 
-    #### --- Use ./test/driver_test_002.json to drive workflow --- ###
+    #### --- Use ./scripts/driver_example_window.json to drive workflow --- ###
     #### --- Steps:
     #### --- RProcess -> prepare raster data (same spatial res, same AOI etc..)
     #### --- RMask -> create a boolean raster mask (True to be masked , False not)
@@ -47,8 +46,7 @@ if __name__ == '__main__':
     ####       other raster with 9999 at the True position
     #### --- RStack -> stack up all the rasters
 
-    # Opening JSON file
-    with open('./tests/driver_test_002.json') as json_file:
+    with open('./scripts/driver_example_polygon.json') as json_file:
         wf_data = json.load(json_file, object_pairs_hook=OrderedDict)
 
     wf = Workflow(wf_data)

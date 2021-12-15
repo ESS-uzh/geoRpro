@@ -1,0 +1,45 @@
+{
+  "RPrepro":  {
+      "Inputs": {"B02": "B02_10m",
+                 "SCL": "SCL_20m",
+                 "B04": "B04_10m",
+                 "B08": "B08_10m",
+                 "B12": "B12_20m"},
+      "Indir" :  "/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA",
+      "Satellite" : "Sentinel2",
+      "Outdir": "/home/diego/work/dev/data/test_data_out",
+      "Polygon": ["/home/diego/work/dev/github/test_data/StudyVillages_Big/StudyVillages_Big.shp","32737", 1],
+      "Res" : 20 
+      },
+
+  "RMask": {
+      "Inputs": {
+      "scl_mask": "SCL.tif"},
+      "Indir": "/home/diego/work/dev/data/test_data_out",
+      "Values": [3, 7, 8, 9, 10]
+     },
+
+  "RReplace": {
+      "Inputs": {"B02_masked": "B02.tif",
+                 "B04_masked": "B04.tif",
+                 "B08_masked": "B08.tif",
+                 "B12_masked": "B12.tif"},
+      "Indir": "/home/diego/work/dev/data/test_data_out",
+      "Replace" : ["scl_mask.tif", 9999]
+      },
+
+   "RIndex": {
+      "Inputs": {"ndvi" : ["B02_masked.tif", "B04_masked.tif"],
+                 "nbr" : ["B08_masked.tif", "B12_masked.tif"]},
+      "Scale": 1000,
+      "Indir": "/home/diego/work/dev/data/test_data_out"
+      },
+
+   "RStack": {
+      "Inputs": {"stack1" : ["B02_masked.tif", "B04_masked.tif", "ndvi.tif"],
+                 "stack2" : ["B08_masked.tif", "B12_masked.tif", "nbr.tif"]},
+      "Dtype" : "int32",
+      "Indir": "/home/diego/work/dev/data/test_data_out"
+   
+   }   
+}
