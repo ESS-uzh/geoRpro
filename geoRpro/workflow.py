@@ -46,7 +46,7 @@ if __name__ == '__main__':
     ####       other raster with 9999 at the True position
     #### --- RStack -> stack up all the rasters
 
-    with open('./scripts/driver_example_polygon.json') as json_file:
+    with open('./scripts/driver_example_window.json') as json_file:
         wf_data = json.load(json_file, object_pairs_hook=OrderedDict)
 
     wf = Workflow(wf_data)
