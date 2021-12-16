@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def load(src, window=False, masked=False, bands=None, **kwargs):
+def load(src, window=False, masked=False, bands=None):
     """
     Load a 3D numpy array in memory
 
@@ -36,22 +36,28 @@ def load(src, window=False, masked=False, bands=None, **kwargs):
     masked : bool (default=False)
              if True exclude nodata values
 
-    bands: list
-           number of bands to be loaded
+    bands: int/list
+           number of bands to be loaded. Note: Indexes start from 1
+           E.g. [1] loads layer 1, [1, 2] loads layers 1 and 2
 
     -------
 
     return: tuple (array, meta)
-               array: 3D numpy arr (bands, rows, columns)
-               meta: dict (metadata associated with the array)
+
+            array: 3D numpy arr (bands, rows, columns)
+            meta: dict (metadata associated with the array)
     """
     meta = src.profile
+    count = src.count
 
     if not bands:
         bands = list(src.indexes)
+    elif isinstance(bands, int):
+        count = 1
+    elif isinstance(bands, list):
+        count = len(bands)
 
-    meta.update({
-        'count': len(bands)})
+    meta.update({'count': count})
 
     if window:
         if isinstance(window, tuple):
@@ -65,7 +71,7 @@ def load(src, window=False, masked=False, bands=None, **kwargs):
             'width': width,
             'transform': rasterio.windows.transform(window, src.transform)})
 
-    arr = src.read(bands, window=window, masked=masked, **kwargs)
+    arr = src.read(bands, window=window, masked=masked)
 
     return arr, meta
 
