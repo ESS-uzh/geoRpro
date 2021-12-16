@@ -9,12 +9,12 @@
       "Satellite" : "Sentinel2",
       "Outdir": "/home/diego/work/dev/data/test_data_out",
       "Window": [[0, 10], [5475, 5490]],
-      "Res" : 20 
+      "Res" : 20
       },
 
   "RMask": {
       "Inputs": {
-          "scl_mask": "scl.tif"},
+          "scl_mask": "SCL.tif"},
       "Indir": "/home/diego/work/dev/data/test_data_out",
       "Values": [4]
   },
@@ -40,6 +40,6 @@
                  "stack2" : ["B08_masked.tif", "B12_masked.tif", "nbr.tif"]},
       "Dtype" : "float32",
       "Indir": "/home/diego/work/dev/data/test_data_out"
-   
-   }   
+
+   }
 }
