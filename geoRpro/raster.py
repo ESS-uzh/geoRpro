@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def load(src, window=False, masked=False, bands=None):
+def load(src, bands=None, window=False, masked=False):
     """
     Load a 3D numpy array in memory
 
@@ -29,16 +29,16 @@ def load(src, window=False, masked=False, bands=None):
     params:
     --------
 
+    bands: list
+           number of bands to be loaded. Note: Indexes start from 1
+           E.g. [1] loads layer 1, [1, 2] loads layers 1 and 2
+
     window : a pair (tuple) of pairs of ints or rasterio.windows.Window obj
-             For example ((0, 2), (0, 2)) defines a 2x2 window at the upper
-             left of the raster dataset.
+           E.g. ((0, 2), (0, 4)) defines a 2rows X 4cols window at the upper
+                 left of the raster dataset.
 
     masked : bool (default=False)
              if True exclude nodata values
-
-    bands: int/list
-           number of bands to be loaded. Note: Indexes start from 1
-           E.g. [1] loads layer 1, [1, 2] loads layers 1 and 2
 
     -------
 
@@ -52,10 +52,10 @@ def load(src, window=False, masked=False, bands=None):
 
     if not bands:
         bands = list(src.indexes)
-    elif isinstance(bands, int):
-        count = 1
     elif isinstance(bands, list):
         count = len(bands)
+    else:
+        raise ValueError('bands arg must be a list')
 
     meta.update({'count': count})
 
@@ -75,6 +75,7 @@ def load(src, window=False, masked=False, bands=None):
 
     return arr, meta
 
+
 def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
     """
     Change the cell size of an existing raster object.
@@ -92,13 +93,19 @@ def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
         src : rasterio.DatasetReader object
 
         scale : int (default:2)
-                 scaling factor to change the cell size with.
-                 scale = 2 -> Upsampling e.g from 10m to 20m resolution
-                 scale = 0.5 -> Downsampling e.g from 20m to 10m resolution
+                scaling factor to change the cell size.
+                To upsample (converting to higher resolution) use scale > 0
+                To downsample (converting to lower resolution) use scale < 0
 
-    return:
+                 E.g.
+                 scale = 2 ->  from initial 20 m res will render to 10 m resolution
 
-        tuple: array, metadata
+                 scale = 0.5 -> from 20m to 10m resolution
+
+    return: tuple (array, meta)
+
+            array: 3D numpy arr (bands, rows, columns)
+            meta: dict (metadata associated with the array)
     """
     t = src.transform
 
@@ -115,6 +122,7 @@ def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
     arr = src.read(out_shape=(src.count, int(height), int(width),),
                    resampling=method)
     return arr, meta
+
 
 def load_polygon(src, geom, crop=True):
     """
@@ -144,6 +152,7 @@ def load_polygon(src, geom, crop=True):
         "transform": out_transform})
     return arr, metadata
 
+
 def mask_vals(arr, meta, vals):
     """
     Create a masked array (data, mask) and metadata based on a list of values
@@ -172,6 +181,7 @@ def mask_vals(arr, meta, vals):
     # create a masked array
     arr = np.ma.MaskedArray(arr, np.in1d(arr, vals))
     return arr, new_meta
+
 
 def apply_mask(arr, mask, fill_value=0):
     """
@@ -203,6 +213,31 @@ def apply_mask(arr, mask, fill_value=0):
     arr_filled = np.ma.filled(masked_arr, fill_value=fill_value)
     return arr_filled
 
+
+def get_windows(src):
+    """
+    Return a list of all windows composing the entire raster
+    """
+    return [win for _, win in src.block_windows(1)]
+
+
+def gen_windows(src):
+    """
+    Yields all windows composing the entire raster
+    """
+    for _, win in src.block_windows(1):
+        yield win
+
+
+def gen_blocks(src):
+    """
+    Yields all block-arrays composing the entire raster, each block has associated metadata
+    """
+    for _, win in src.block_windows(1):
+        arr, meta = load(src, window=win)
+        yield arr, meta
+
+
 class Indexes:
     """
     Provide methods to calculate different raster indexes
@@ -215,7 +250,7 @@ class Indexes:
                 used to calculate the indexes
 
      scale_factor: int (default:1000)
-               Calculated indexes array are scaled for one of those facors:
+               Calculated indexes array are scaled for one of those factors:
                1 -> Return a float array
                1000 -> Return an int array
     """
