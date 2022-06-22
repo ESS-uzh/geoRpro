@@ -61,7 +61,7 @@ netaddr==0.8.0
 netifaces==0.10.9
 networkx==2.4
 notebook==6.4.1
-numpy==1.19.1
+numpy==1.22.0
 openpyxl==3.0.6
 os-service-types==1.7.0
 oslo.config==8.4.0
