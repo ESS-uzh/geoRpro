@@ -67,7 +67,7 @@ os-service-types==1.7.0
 oslo.config==8.4.0
 oslo.i18n==5.0.1
 oslo.serialization==4.0.1
-oslo.utils==4.7.0
+oslo.utils==4.10.1
 packaging==20.4
 pandas==1.1.0
 pandocfilters==1.4.2
