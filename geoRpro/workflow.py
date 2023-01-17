@@ -7,12 +7,12 @@ import pdb
 import rasterio
 
 
-
 class Workflow:
     ACTIONS = {'RPrepro', 'RMask', 'RReplace', 'RStack', 'RIndex'}
 
     def __init__(self, instructions):
         self.instructions = copy.deepcopy(instructions)
+        pdb.set_trace()
         self.actions = []
         self._parse_wf()
 
@@ -36,15 +36,14 @@ class Workflow:
 
 if __name__ == '__main__':
 
-
     #### --- Use ./scripts/driver_example_window.json to drive workflow --- ###
-    #### --- Steps:
-    #### --- RProcess -> prepare raster data (same spatial res, same AOI etc..)
-    #### --- RMask -> create a boolean raster mask (True to be masked , False not)
-    #### --- RI_ndivi etc -> Calc indexes -> ndvi, etc..
-    #### --- RReplace -> Use mask bool raster to replace the pixel values of
-    ####       other raster with 9999 at the True position
-    #### --- RStack -> stack up all the rasters
+    # --- Steps:
+    # --- RProcess -> prepare raster data (same spatial res, same AOI etc..)
+    # --- RMask -> create a boolean raster mask (True to be masked , False not)
+    # --- RI_ndivi etc -> Calc indexes -> ndvi, etc..
+    # --- RReplace -> Use mask bool raster to replace the pixel values of
+    # other raster with 9999 at the True position
+    # --- RStack -> stack up all the rasters
 
     with open('./scripts/driver_example_window.json') as json_file:
         wf_data = json.load(json_file, object_pairs_hook=OrderedDict)

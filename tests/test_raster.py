@@ -7,23 +7,29 @@ import geoRpro.raster as rst
 import geoRpro.io as io
 from geoRpro.raster import Indexes
 
+from typing import Generator, Any
+
 import pdb
 
+
 @pytest.fixture
-def raster_src():
-    src = rasterio.open('./data/RGB.byte.tif')
+def raster_src() -> Generator[Any, None, None]:
+    src: Any = rasterio.open('./data/RGB.byte.tif')
     yield src
     src.close()
 
-def test_raise_bands_arg_not_a_list(raster_src):
+
+def test_raise_bands_arg_not_a_list(raster_src: Any) -> None:
     """Pass int to bands raise ValueError"""
     with pytest.raises(ValueError):
         rst.load(raster_src, bands=1)
+
 
 def test_meta_bands(raster_src):
     """Pass list of bands produces count equal 2"""
     _, meta = rst.load(raster_src, bands=[1, 2])
     assert meta['count'] == 2
+
 
 def test_meta_all_bands(raster_src):
     """Pass no bands argument"""
@@ -32,12 +38,15 @@ def test_meta_all_bands(raster_src):
     assert meta['height'] == 718
     assert meta['width'] == 791
 
+
 def test_meta_window(raster_src):
     """Pass bands and window"""
-    arr, meta = rst.load(raster_src, bands=[1, 2], window=((6, 12), (171, 175)))
+    arr, meta = rst.load(raster_src, bands=[
+                         1, 2], window=((6, 12), (171, 175)))
     assert meta['height'] == 6
     assert meta['width'] == 4
     assert meta['count'] == 2
+
 
 def test_array_window(raster_src):
     arr, _ = rst.load(raster_src, bands=[1], window=((6, 12), (171, 175)))
@@ -49,6 +58,7 @@ def test_array_window(raster_src):
         [8, 6, 6, 6],
         [6, 6, 6, 5]], dtype=np.int8)
     assert (arr == expected).all()
+
 
 def test_array_mask(raster_src):
     arr, _ = rst.load(raster_src, bands=[1], window=((6, 12), (156, 160)),
@@ -62,19 +72,24 @@ def test_array_mask(raster_src):
         [True, False, False, False]])
     assert (arr.mask == expected).all()
 
+
 def test_meta_upsample(raster_src):
     _, meta = rst.load_resample(raster_src, scale=2)
     assert meta['width'] == 1582
     assert meta['height'] == 1436
+
 
 def test_meta_downsample(raster_src):
     _, meta = rst.load_resample(raster_src, scale=0.5)
     assert meta['width'] == 395.5
     assert meta['height'] == 359.0
 
+
 def test_ndvi_scale_factor_1000(raster_src):
-    red, meta_red = rst.load(raster_src, bands=[1], window=((6, 12), (171, 175)))
-    nir, meta_nir = rst.load(raster_src, bands=[2], window=((6, 12), (171, 175)))
+    red, meta_red = rst.load(
+        raster_src, bands=[1], window=((6, 12), (171, 175)))
+    nir, meta_nir = rst.load(
+        raster_src, bands=[2], window=((6, 12), (171, 175)))
     with ExitStack() as stack:
         src_red = stack.enter_context(io.to_src(red, meta_red))
         src_nir = stack.enter_context(io.to_src(nir, meta_nir))
@@ -89,9 +104,12 @@ def test_ndvi_scale_factor_1000(raster_src):
         [625, 647, 600, 655]], dtype=np.int32)
     assert (ndvi == expected_ndvi).all()
 
+
 def test_ndvi_scale_factor_1(raster_src):
-    red, meta_red = rst.load(raster_src, bands=[1], window=((6, 12), (171, 175)))
-    nir, meta_nir = rst.load(raster_src, bands=[2], window=((6, 12), (171, 175)))
+    red, meta_red = rst.load(
+        raster_src, bands=[1], window=((6, 12), (171, 175)))
+    nir, meta_nir = rst.load(
+        raster_src, bands=[2], window=((6, 12), (171, 175)))
     with ExitStack() as stack:
         src_red = stack.enter_context(io.to_src(red, meta_red))
         src_nir = stack.enter_context(io.to_src(nir, meta_nir))

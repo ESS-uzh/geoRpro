@@ -84,7 +84,7 @@ class RPrepro(ProcessBase):
         self._polygon = gdf['geometry'][index]
 
     def _parse_args(self):
-        ## NOte: Values inserted in data should be checked, property ?!
+        # NOte: Values inserted in data should be checked, property ?!
         self.res = self.instructions.get('Res')
         if self.instructions.get('Polygon'):
             self.polygon = self.instructions.get('Polygon')
@@ -95,7 +95,7 @@ class RPrepro(ProcessBase):
     def run(self):
         with ExitStack() as stack_files:
 
-            self.outputs = {k:stack_files.enter_context(rasterio.open(v))
+            self.outputs = {k: stack_files.enter_context(rasterio.open(v))
                             for (k, v) in self.inputs.items()}
 
             with ExitStack() as stack_action:
@@ -104,8 +104,10 @@ class RPrepro(ProcessBase):
 
                     print(f'Raster: {name} has {src.res[0]} m resolution..')
 
-                    if self.res and src.res[0] != self.res: # resample to match res param
-                        print(f'Raster: {name} will be resampled to {self.res} m resolution..')
+                    # resample to match res param
+                    if self.res and src.res[0] != self.res:
+                        print(
+                            f'Raster: {name} will be resampled to {self.res} m resolution..')
                         scale_factor = src.res[0] / self.res
                         arr, meta = rst.load_resample(src, scale_factor)
                         src = stack_action.enter_context(io.to_src(arr, meta))
@@ -159,7 +161,7 @@ class RMask(ProcessBase):
 
     def run(self):
         with ExitStack() as stack_files:
-            self.outputs = {k:stack_files.enter_context(rasterio.open(v))
+            self.outputs = {k: stack_files.enter_context(rasterio.open(v))
                             for (k, v) in self.inputs.items()}
 
             for name, src in self.outputs.items():
@@ -209,14 +211,15 @@ class RReplace(ProcessBase):
 
     def run(self):
         with ExitStack() as stack_files:
-            self.outputs = {k:stack_files.enter_context(rasterio.open(v))
+            self.outputs = {k: stack_files.enter_context(rasterio.open(v))
                             for (k, v) in self.inputs.items()}
             src_mask = stack_files.enter_context(rasterio.open(os.path.join(self.indir,
                                                                             self.fpath_mask)))
             mask, _ = rst.load(src_mask)
 
             for name, src in self.outputs.items():
-                print(f"Replace values with {self.value} at mask array position")
+                print(
+                    f"Replace values with {self.value} at mask array position")
                 arr, meta = rst.load(src)
                 assert mask.shape == arr.shape, 'Array and mask must the have same shape'
                 arr_replaced = rst.apply_mask(arr, mask, fill_value=self.value)
@@ -245,7 +248,8 @@ class RStack(ProcessBase):
             if src.width != test_src.width or src.height != test_src.height:
                 raise ValueError('Raster data must have the same size')
             if src.res != test_src.res:
-                raise ValueError('Raster data must have the same spacial resolution')
+                raise ValueError(
+                    'Raster data must have the same spacial resolution')
 
     def run(self):
         self.outputs = {}
@@ -285,7 +289,8 @@ class RIndex(ProcessBase):
             if src.width != test_src.width or src.height != test_src.height:
                 raise ValueError('Raster data must have the same size')
             if src.res != test_src.res:
-                raise ValueError('Raster data must have the same spacial resolution')
+                raise ValueError(
+                    'Raster data must have the same spacial resolution')
 
     def calc_index(self, name, metadata, scale):
         index = rst.Indexes(metadata, scale)
@@ -311,7 +316,8 @@ class RIndex(ProcessBase):
                 metadata_index = srcs[0].profile
                 metadata_index.update(driver='GTiff')
 
-                index = self.calc_index(name, metadata_index, scale=self.scale_factor)
+                index = self.calc_index(
+                    name, metadata_index, scale=self.scale_factor)
                 arr, meta = index(*srcs)
 
                 outdir = self._create_outdir()
@@ -322,64 +328,65 @@ class RIndex(ProcessBase):
 
 
 if __name__ == '__main__':
+    pass
 
-    ORIGIN = '/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA'
-    SHAPE = "/home/diego/work/dev/github/test_data/StudyVillages_Big/StudyVillages_Big.shp"
-    DATADIR = '/home/diego/work/dev/data/test_data_out'
-    inst0 = {"Inputs": {"B02": "B02_10m",
-                        "SCL": "SCL_20m",
-                        "B04": "B04_10m",
-                        "B08": "B08_10m",
-                        "B12": "B12_20m"},
-             "Indir" : ORIGIN,
-             "Satellite" : "Sentinel2",
-             "Outdir": DATADIR,
-             #"Window": [(0, 10), (5475, 5490)],
-             'Polygon': [SHAPE, "32737", 1],
-             "Res" : 20}
+    # ORIGIN = '/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA'
+    # SHAPE = "/home/diego/work/dev/github/test_data/StudyVillages_Big/StudyVillages_Big.shp"
+    # DATADIR = '/home/diego/work/dev/data/test_data_out'
+    # inst0 = {"Inputs": {"B02": "B02_10m",
+    #                    "SCL": "SCL_20m",
+    #                    "B04": "B04_10m",
+    #                    "B08": "B08_10m",
+    #                    "B12": "B12_20m"},
+    #         "Indir" : ORIGIN,
+    #         "Satellite" : "Sentinel2",
+    #         "Outdir": DATADIR,
+    #         #"Window": [(0, 10), (5475, 5490)],
+    #         'Polygon': [SHAPE, "32737", 1],
+    #         "Res" : 20}
 
-    inst1 = {"Inputs": {"SCL_mask": "SCL.tif",
-                       },
-             "Indir" : DATADIR,
-             #"Values" : [4]
-             "Values": [3, 7, 8, 9, 10]}
+    # inst1 = {"Inputs": {"SCL_mask": "SCL.tif",
+    #                   },
+    #         "Indir" : DATADIR,
+    #         #"Values" : [4]
+    #         "Values": [3, 7, 8, 9, 10]}
 
-    inst2 = {"Inputs": {"B02_masked": "B02.tif",
-                        "B04_masked": "B04.tif",
-                        "B08_masked": "B08.tif",
-                        "B12_masked": "B12.tif"
-                       },
-             "Indir" : DATADIR,
-             "Replace" : ['SCL_mask.tif', 9999]}
+    # inst2 = {"Inputs": {"B02_masked": "B02.tif",
+    #                    "B04_masked": "B04.tif",
+    #                    "B08_masked": "B08.tif",
+    #                    "B12_masked": "B12.tif"
+    #                   },
+    #         "Indir" : DATADIR,
+    #         "Replace" : ['SCL_mask.tif', 9999]}
 
-    inst3 = {"Inputs": {"ndvi" : ["B02_masked.tif", "B04_masked.tif"],
-                        "nbr" : ["B08_masked.tif", "B12_masked.tif"]},
-             "Scale": 1,
-             "Indir" : DATADIR}
+    # inst3 = {"Inputs": {"ndvi" : ["B02_masked.tif", "B04_masked.tif"],
+    #                    "nbr" : ["B08_masked.tif", "B12_masked.tif"]},
+    #         "Scale": 1,
+    #         "Indir" : DATADIR}
 
-    inst4 = {"Inputs": {"stack1" : ["B02_masked.tif", "B04_masked.tif", "ndvi.tif"],
-                        "stack2" : ["B08_masked.tif", "B12_masked.tif", "nbr.tif"]},
-             "Dtype" : "float32",
-             "Indir" : DATADIR}
+    # inst4 = {"Inputs": {"stack1" : ["B02_masked.tif", "B04_masked.tif", "ndvi.tif"],
+    #                    "stack2" : ["B08_masked.tif", "B12_masked.tif", "nbr.tif"]},
+    #         "Dtype" : "float32",
+    #         "Indir" : DATADIR}
 
-    prepro = RPrepro(inst0)
-    prepro.run()
-    maskpro = RMask(inst1)
-    maskpro.run()
-    replacepro = RReplace(inst2)
-    replacepro.run()
-    rindexpro = RIndex(inst3)
-    rindexpro.run()
-    rstackpro = RStack(inst4)
-    rstackpro.run()
+    # prepro = RPrepro(inst0)
+    # prepro.run()
+    # maskpro = RMask(inst1)
+    # maskpro.run()
+    # replacepro = RReplace(inst2)
+    # replacepro.run()
+    # rindexpro = RIndex(inst3)
+    # rindexpro.run()
+    # rstackpro = RStack(inst4)
+    # rstackpro.run()
 
     # check outputs
-    #arr_scl, meta_scl = rst.load(rasterio.open(prepro.outputs['SCL']))
-    #arr_b03, meta_b03 = rst.load(rasterio.open(prepro.outputs['B03']))
-    arr_b08, meta_b08 = rst.load(rasterio.open(prepro.outputs['B08']))
-    #arr_scl_mask, meta_scl_mask = rst.load(rasterio.open(maskpro.outputs['SCL_mask']))
-    #arr_b03_masked, meta_b03_masked = rst.load(rasterio.open(replacepro.outputs['B03_masked']))
-    arr_b08_masked, meta_b08_masked = rst.load(rasterio.open(replacepro.outputs['B08_masked']))
-    arr_ndvi, meta_ndvi = rst.load(rasterio.open(rindexpro.outputs['ndvi']))
-    arr_stack1, meta_stack1 = rst.load(rasterio.open(rstackpro.outputs['stack1']))
-    #arr_stack2, meta_stack2 = rst.load(rasterio.open(rstackpro.outputs['stack2']))
+    # arr_scl, meta_scl = rst.load(rasterio.open(prepro.outputs['SCL']))
+    # arr_b03, meta_b03 = rst.load(rasterio.open(prepro.outputs['B03']))
+    # arr_b08, meta_b08 = rst.load(rasterio.open(prepro.outputs['B08']))
+    # arr_scl_mask, meta_scl_mask = rst.load(rasterio.open(maskpro.outputs['SCL_mask']))
+    # arr_b03_masked, meta_b03_masked = rst.load(rasterio.open(replacepro.outputs['B03_masked']))
+    # arr_b08_masked, meta_b08_masked = rst.load(rasterio.open(replacepro.outputs['B08_masked']))
+    # arr_ndvi, meta_ndvi = rst.load(rasterio.open(rindexpro.outputs['ndvi']))
+    # arr_stack1, meta_stack1 = rst.load(rasterio.open(rstackpro.outputs['stack1']))
+    # arr_stack2, meta_stack2 = rst.load(rasterio.open(rstackpro.outputs['stack2']))

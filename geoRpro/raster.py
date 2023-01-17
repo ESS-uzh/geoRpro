@@ -14,13 +14,15 @@ from rasterio.windows import Window
 from rasterio.warp import Resampling
 from geoRpro.sent2 import Sentinel2
 
+from typing import Generator, Any
+
 import pdb
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def load(src, bands=None, window=False, masked=False):
+def load(src: Any, bands: None = None, window: None = None, masked: bool = False) -> tuple:
     """
     Load a 3D numpy array in memory
 
@@ -51,6 +53,7 @@ def load(src, bands=None, window=False, masked=False):
     count = src.count
 
     if not bands:
+        bands: list[int]
         bands = list(src.indexes)
     elif isinstance(bands, list):
         count = len(bands)
@@ -61,8 +64,8 @@ def load(src, bands=None, window=False, masked=False):
 
     if window:
         if isinstance(window, tuple):
-            height = window[0][1] -window[0][0]
-            width = window[1][1] -window[1][0]
+            height = window[0][1] - window[0][0]
+            width = window[1][1] - window[1][0]
         else:
             height = window.height
             width = window.width
@@ -116,7 +119,7 @@ def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
 
     meta = src.profile
     meta.update(transform=transform, driver='GTiff', height=height,
-                    width=width)
+                width=width)
 
     # resampling
     arr = src.read(out_shape=(src.count, int(height), int(width),),
@@ -264,23 +267,21 @@ class Indexes:
     def scale_factor(self):
         return self._scale_factor
 
-
     @scale_factor.setter
     def scale_factor(self, value):
         if value == 1000:
             self.metadata.update({
-            'driver': 'GTiff',
-            'dtype': 'int32',
-            'count': 1})
+                'driver': 'GTiff',
+                'dtype': 'int32',
+                'count': 1})
         elif value == 1:
             self.metadata.update({
-            'driver': 'GTiff',
-            'dtype': 'float32',
-            'count': 1})
+                'driver': 'GTiff',
+                'dtype': 'float32',
+                'count': 1})
         else:
             raise ValueError("Allowed scale factors are: 1 or 1000")
         self._scale_factor = value
-
 
     def _scale_and_round(self, arr):
         array = arr * self.scale_factor
@@ -288,33 +289,30 @@ class Indexes:
             array = array.astype(np.int32)
         return array, self.metadata
 
-
     def ndvi(self, red_src, nir_src):
         # to do: check for rasters to be (1, width, height)
         redB = red_src.read()
         nirB = nir_src.read()
         np.seterr(divide='ignore', invalid='ignore')
-        ndvi = (nirB.astype(np.float32)-redB.astype(np.float32))/ \
-                   (nirB.astype(np.float32)+redB.astype(np.float32))
+        ndvi = (nirB.astype(np.float32)-redB.astype(np.float32)) / \
+            (nirB.astype(np.float32)+redB.astype(np.float32))
         # replace nan with 0
         where_are_NaNs = np.isnan(ndvi)
         ndvi[where_are_NaNs] = 0
 
         return self._scale_and_round(ndvi)
 
-
     def nbr(self, nir_src, swir_src):
         """ Normalized Burn Ratio """
         nirB = nir_src.read()
         swirB = swir_src.read()
         np.seterr(divide='ignore', invalid='ignore')
-        nbr = (nirB.astype(np.float32)-swirB.astype(np.float32))/ \
-                   (nirB.astype(np.float32)+swirB.astype(np.float32))
+        nbr = (nirB.astype(np.float32)-swirB.astype(np.float32)) / \
+            (nirB.astype(np.float32)+swirB.astype(np.float32))
         # replace nan with 0
         where_are_NaNs = np.isnan(nbr)
         nbr[where_are_NaNs] = 0
         return self._scale_and_round(nbr)
-
 
     def bsi(self, blue_src, red_src, nir_src, swir_src):
         """ Bare Soil Index (BSI) """
@@ -324,20 +322,20 @@ class Indexes:
         swirB = swir_src.read()
         np.seterr(divide='ignore', invalid='ignore')
         bsi = ((swirB.astype(np.float32)+redB.astype(np.float32))-(nirB.astype(np.float32)+blueB.astype(np.float32))) / \
-            ((swirB.astype(np.float32)+redB.astype(np.float32))+(nirB.astype(np.float32)+blueB.astype(np.float32)))
+            ((swirB.astype(np.float32)+redB.astype(np.float32)) +
+             (nirB.astype(np.float32)+blueB.astype(np.float32)))
         # replace nan with 0
         where_are_NaNs = np.isnan(bsi)
         bsi[where_are_NaNs] = 0
         return self._scale_and_round(bsi)
-
 
     def ndwi(self, green_src, nir_src):
         """ Normalized Difference Water Index (NDWI)  """
         greenB = green_src.read()
         nirB = nir_src.read()
         np.seterr(divide='ignore', invalid='ignore')
-        ndwi = (greenB.astype(np.float32)-nirB.astype(np.float32))/ \
-                   (greenB.astype(np.float32)+nirB.astype(np.float32))
+        ndwi = (greenB.astype(np.float32)-nirB.astype(np.float32)) / \
+            (greenB.astype(np.float32)+nirB.astype(np.float32))
         # replace nan with 0
         where_are_NaNs = np.isnan(ndwi)
         ndwi[where_are_NaNs] = 0

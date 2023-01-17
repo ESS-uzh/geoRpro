@@ -7,12 +7,12 @@ import rasterio
 import geopandas as gpd
 from geoRpro.sent2 import Sentinel2
 import geoRpro.raster as rst
-import geoRpro.io as io
 
 import pdb
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 class ProcessBase:
     """
@@ -39,7 +39,7 @@ class ProcessBase:
 
     """
 
-    def __init__(self, instructions):
+    def __init__(self, instructions) -> None:
         self.instructions = copy.deepcopy(instructions)
         self.parse_instructions()
         self.get_fpaths()
@@ -123,6 +123,7 @@ class ProcessBase:
                     except KeyError:
                         raise ValueError(f"Cannot find band: '{band_name}'. Please \
                                 provide valid Sentinel2 band name.")
+
     def __fname_raster(self):
         for name, file_name in self.inputs.items():
             self.inputs[name] = os.path.join(self.indir, file_name)
