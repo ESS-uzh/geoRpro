@@ -1,28 +1,27 @@
-import os
-import sys
-import copy
-import math
 import logging
-import collections
-from contextlib import contextmanager
-from contextlib import ExitStack
 
 import numpy as np
+from nptyping import NDArray, UInt8, Int32, Float32, Shape, Bool
 import rasterio
 from rasterio.mask import mask
 from rasterio.windows import Window
 from rasterio.warp import Resampling
 from geoRpro.sent2 import Sentinel2
 
-from typing import Generator, Any
+from typing import Generator, Any, Final, Literal
 
 import pdb
 
-logger = logging.getLogger(__name__)
+logger: Any = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def load(src: Any, bands: None = None, window: None = None, masked: bool = False) -> tuple:
+def load(
+    src: Any,
+    bands: list[int] | None = None,
+    window: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    masked: bool = False,
+) -> tuple[NDArray[Any, Any] | Any, dict[str, Any]]:
     """
     Load a 3D numpy array in memory
 
@@ -49,37 +48,41 @@ def load(src: Any, bands: None = None, window: None = None, masked: bool = False
             array: 3D numpy arr (bands, rows, columns)
             meta: dict (metadata associated with the array)
     """
-    meta = src.profile
-    count = src.count
+    meta: dict[str, Any] = src.profile
+    count: int = src.count
 
     if not bands:
-        bands: list[int]
         bands = list(src.indexes)
     elif isinstance(bands, list):
         count = len(bands)
     else:
-        raise ValueError('bands arg must be a list')
+        raise ValueError("bands arg must be a list")
 
-    meta.update({'count': count})
+    meta.update({"count": count})
 
     if window:
         if isinstance(window, tuple):
-            height = window[0][1] - window[0][0]
-            width = window[1][1] - window[1][0]
+            height: int = window[0][1] - window[0][0]
+            width: int = window[1][1] - window[1][0]
         else:
             height = window.height
             width = window.width
-        meta.update({
-            'height': height,
-            'width': width,
-            'transform': rasterio.windows.transform(window, src.transform)})
+        meta.update(
+            {
+                "height": height,
+                "width": width,
+                "transform": rasterio.windows.transform(window, src.transform),
+            }
+        )
 
-    arr = src.read(bands, window=window, masked=masked)
+    arr: Final[NDArray[Any, Any]] = src.read(bands, window=window, masked=masked)
 
     return arr, meta
 
 
-def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
+def load_resample(
+    src: Any, scale: float = 2, method: Any = rasterio.enums.Resampling.nearest
+) -> tuple[NDArray[Any, Any], dict[str, Any]]:
     """
     Change the cell size of an existing raster object.
 
@@ -110,24 +113,32 @@ def load_resample(src, scale=2, method=rasterio.enums.Resampling.nearest):
             array: 3D numpy arr (bands, rows, columns)
             meta: dict (metadata associated with the array)
     """
-    t = src.transform
+    t: Any = src.transform
 
     # rescale the metadata
-    transform = rasterio.Affine(t.a / scale, t.b, t.c, t.d, t.e / scale, t.f)
-    height = src.height * scale
-    width = src.width * scale
+    transform: Any = rasterio.Affine(t.a / scale, t.b, t.c, t.d, t.e / scale, t.f)
+    height: Final[float] = src.height * scale
+    width: Final[int] = src.width * scale
 
-    meta = src.profile
-    meta.update(transform=transform, driver='GTiff', height=height,
-                width=width)
+    meta: dict[str, Any] = src.profile
+    meta.update(transform=transform, driver="GTiff", height=height, width=width)
 
     # resampling
-    arr = src.read(out_shape=(src.count, int(height), int(width),),
-                   resampling=method)
+    arr: NDArray[Any, Any] = src.read(
+        out_shape=(
+            src.count,
+            int(height),
+            int(width),
+        ),
+        resampling=method,
+    )
     return arr, meta
 
 
-def load_polygon(src, geom, crop=True):
+def load_polygon(
+    src: Any, geom: Any, crop: bool = True
+) -> tuple[NDArray[Any, Any], dict[str, Any]]:
+
     """
     Load a raster array from an input shape
 
@@ -138,6 +149,8 @@ def load_polygon(src, geom, crop=True):
 
         geom : GEOJson-like dict
                input shape, e.g. { 'type': 'Polygon', 'coordinates': [[(),(),(),()]] }
+               or
+               class 'shapely.geometry.polygon.Polygon'
 
         crop : bool (dafault:True)
                Whether to crop the raster to the extent of the shapes
@@ -148,15 +161,20 @@ def load_polygon(src, geom, crop=True):
     """
     arr, out_transform = rasterio.mask.mask(src, [geom], crop=crop)
     metadata = src.profile
-    metadata.update({
-        "driver": "GTiff",
-        "height": arr.shape[1],
-        "width": arr.shape[2],
-        "transform": out_transform})
+    metadata.update(
+        {
+            "driver": "GTiff",
+            "height": arr.shape[1],
+            "width": arr.shape[2],
+            "transform": out_transform,
+        }
+    )
     return arr, metadata
 
 
-def mask_vals(arr, meta, vals):
+def mask_vals(
+    arr: NDArray, meta: dict[str, Any], vals: list
+) -> tuple[NDArray, dict[str, Any]]:
     """
     Create a masked array (data, mask) and metadata based on a list of values
 
@@ -178,15 +196,14 @@ def mask_vals(arr, meta, vals):
         tuple: masked array, metadata
     """
     # update metadata
-    new_meta = meta.copy()
-    new_meta.update({
-        'nbits': 1})
+    new_meta: dict[str, Any] = meta.copy()
+    new_meta.update({"nbits": 1})
     # create a masked array
     arr = np.ma.MaskedArray(arr, np.in1d(arr, vals))
     return arr, new_meta
 
 
-def apply_mask(arr, mask, fill_value=0):
+def apply_mask(arr: NDArray, mask: NDArray, fill_value: int = 0) -> NDArray:
     """
     Apply a mask to a target array and replace masked values with a
     fill_value
@@ -195,7 +212,7 @@ def apply_mask(arr, mask, fill_value=0):
     params:
     --------
 
-        mask : numpy boolean mask arr
+        mask : numpy boolean arr
                e.g. mask_arr.mask
 
         fill_value : int (default:0)
@@ -206,14 +223,13 @@ def apply_mask(arr, mask, fill_value=0):
            is equal to 1
     """
     # check arr and mask_arr have the same dimensions
-    assert (arr.shape == mask.shape),\
-        "Array and mask must have the same dimensions!"
+    assert arr.shape == mask.shape, "Array and mask must have the same dimensions!"
 
     # get masked array
-    masked_arr = np.ma.array(arr, mask=mask)
+    masked_arr: Any = np.ma.array(arr, mask=mask)
 
     # Fill masked vales with fill_value
-    arr_filled = np.ma.filled(masked_arr, fill_value=fill_value)
+    arr_filled: Any = np.ma.filled(masked_arr, fill_value=fill_value)
     return arr_filled
 
 
@@ -258,84 +274,101 @@ class Indexes:
                1000 -> Return an int array
     """
 
-    def __init__(self, metadata, scale_factor=1000):
+    def __init__(
+        self, metadata: dict[str, Any], scale_factor: Literal[1, 1000] = 1000
+    ) -> None:
 
-        self.metadata = metadata
+        self.metadata: dict[str, Any] = metadata
         self.scale_factor = scale_factor
 
     @property
-    def scale_factor(self):
+    def scale_factor(self) -> Literal[1000, 1]:
         return self._scale_factor
 
     @scale_factor.setter
-    def scale_factor(self, value):
+    def scale_factor(self, value: Literal[1, 1000]) -> None:
         if value == 1000:
-            self.metadata.update({
-                'driver': 'GTiff',
-                'dtype': 'int32',
-                'count': 1})
+            self.metadata.update({"driver": "GTiff", "dtype": "int32", "count": 1})
         elif value == 1:
-            self.metadata.update({
-                'driver': 'GTiff',
-                'dtype': 'float32',
-                'count': 1})
+            self.metadata.update({"driver": "GTiff", "dtype": "float32", "count": 1})
         else:
             raise ValueError("Allowed scale factors are: 1 or 1000")
-        self._scale_factor = value
+        self._scale_factor: Literal[1000, 1] = value
 
-    def _scale_and_round(self, arr):
-        array = arr * self.scale_factor
+    def _scale_and_round(
+        self, arr: NDArray[Any, Float32]
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        array: NDArray[Any, Any] = arr * self.scale_factor
         if self.scale_factor == 1000:
             array = array.astype(np.int32)
         return array, self.metadata
 
-    def ndvi(self, red_src, nir_src):
+    def ndvi(
+        self, red_src: Any, nir_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+
         # to do: check for rasters to be (1, width, height)
-        redB = red_src.read()
-        nirB = nir_src.read()
-        np.seterr(divide='ignore', invalid='ignore')
-        ndvi = (nirB.astype(np.float32)-redB.astype(np.float32)) / \
-            (nirB.astype(np.float32)+redB.astype(np.float32))
+        redB: NDArray[Any, Any] = red_src.read()
+        nirB: NDArray[Any, Any] = nir_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        ndvi: NDArray[Any, Float32] = (
+            nirB.astype(np.float32) - redB.astype(np.float32)
+        ) / (nirB.astype(np.float32) + redB.astype(np.float32))
         # replace nan with 0
-        where_are_NaNs = np.isnan(ndvi)
+        where_are_NaNs: NDArray[Any, Bool] = np.isnan(ndvi)
         ndvi[where_are_NaNs] = 0
 
         return self._scale_and_round(ndvi)
 
-    def nbr(self, nir_src, swir_src):
-        """ Normalized Burn Ratio """
-        nirB = nir_src.read()
-        swirB = swir_src.read()
-        np.seterr(divide='ignore', invalid='ignore')
-        nbr = (nirB.astype(np.float32)-swirB.astype(np.float32)) / \
-            (nirB.astype(np.float32)+swirB.astype(np.float32))
+    def nbr(
+        self, nir_src, swir_src
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+
+        """Normalized Burn Ratio"""
+        nirB: NDArray[Any, Any] = nir_src.read()
+        swirB: NDArray[Any, Any] = swir_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        nbr: NDArray[Any, Float32] = (
+            nirB.astype(np.float32) - swirB.astype(np.float32)
+        ) / (nirB.astype(np.float32) + swirB.astype(np.float32))
         # replace nan with 0
-        where_are_NaNs = np.isnan(nbr)
+        where_are_NaNs: NDArray[Any, Bool] = np.isnan(nbr)
         nbr[where_are_NaNs] = 0
         return self._scale_and_round(nbr)
 
-    def bsi(self, blue_src, red_src, nir_src, swir_src):
-        """ Bare Soil Index (BSI) """
+    def bsi(
+        self, blue_src, red_src, nir_src, swir_src
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+
+        """Bare Soil Index (BSI)"""
         blueB = blue_src.read()
         redB = red_src.read()
         nirB = nir_src.read()
         swirB = swir_src.read()
-        np.seterr(divide='ignore', invalid='ignore')
-        bsi = ((swirB.astype(np.float32)+redB.astype(np.float32))-(nirB.astype(np.float32)+blueB.astype(np.float32))) / \
-            ((swirB.astype(np.float32)+redB.astype(np.float32)) +
-             (nirB.astype(np.float32)+blueB.astype(np.float32)))
+        np.seterr(divide="ignore", invalid="ignore")
+        bsi = (
+            (swirB.astype(np.float32) + redB.astype(np.float32))
+            - (nirB.astype(np.float32) + blueB.astype(np.float32))
+        ) / (
+            (swirB.astype(np.float32) + redB.astype(np.float32))
+            + (nirB.astype(np.float32) + blueB.astype(np.float32))
+        )
         # replace nan with 0
         where_are_NaNs = np.isnan(bsi)
         bsi[where_are_NaNs] = 0
         return self._scale_and_round(bsi)
 
-    def ndwi(self, green_src, nir_src):
-        """ Normalized Difference Water Index (NDWI)  """
+    def ndwi(
+        self, green_src, nir_src
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+
+        """Normalized Difference Water Index (NDWI)"""
         greenB = green_src.read()
         nirB = nir_src.read()
-        np.seterr(divide='ignore', invalid='ignore')
-        ndwi = (greenB.astype(np.float32)-nirB.astype(np.float32)) / \
-            (greenB.astype(np.float32)+nirB.astype(np.float32))
+        np.seterr(divide="ignore", invalid="ignore")
+        ndwi = (greenB.astype(np.float32) - nirB.astype(np.float32)) / (
+            greenB.astype(np.float32) + nirB.astype(np.float32)
+        )
         # replace nan with 0
         where_are_NaNs = np.isnan(ndwi)
         ndwi[where_are_NaNs] = 0

@@ -2,22 +2,23 @@ import os
 import json
 
 import numpy as np
+import geopandas as gpd
 
 ## * JSON related
 
 # Serializing Python Objects not supported by JSON
 class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.str_):
+            return str(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
-        def default(self, obj):
-            if isinstance(obj, np.integer):
-                return int(obj)
-            elif isinstance(obj, np.floating):
-                return float(obj)
-            elif isinstance(obj, np.str_):
-                return str(obj)
-            elif isinstance(obj, np.ndarray):
-                return obj.tolist()
-            return json.JSONEncoder.default(self, obj)
 
 def load_json(fpath):
     """
@@ -29,7 +30,7 @@ def load_json(fpath):
         a list of dictionaries
     """
 
-    with open(fpath, 'r', encoding='utf-8') as f:
+    with open(fpath, "r", encoding="utf-8") as f:
         json_str = json.loads(f.read())
 
     data = json.loads(json_str)
@@ -61,11 +62,18 @@ def json_to_disk(json_arr, fpath):
         json_arr -> json object
         name -> filename to write
     """
-    with open(fpath, 'w', encoding='utf-8') as f:
+    with open(fpath, "w", encoding="utf-8") as f:
         json.dump(json_arr, f)
     return fpath
 
+
+def load_shapefile(fpath):
+    shape = gpd.read_file(fpath)
+    return shape
+
+
 ## * Helpers
+
 
 def gen_sublist(a_list, inc):
     """
@@ -88,6 +96,7 @@ def gen_sublist(a_list, inc):
         start = block
         block = block + inc
 
+
 def gen_current_front_pairs(a_list):
     """
     Yield a current element (elements composing the list except for
@@ -98,7 +107,7 @@ def gen_current_front_pairs(a_list):
     """
     idx_current = 0
     idx_front = 1
-    while idx_current < len(a_list)-1:
+    while idx_current < len(a_list) - 1:
         for el_front in a_list[idx_front:]:
             yield a_list[idx_current], el_front
         idx_current += 1
@@ -107,4 +116,5 @@ def gen_current_front_pairs(a_list):
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()
