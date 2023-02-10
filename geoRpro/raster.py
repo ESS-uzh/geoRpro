@@ -4,9 +4,6 @@ import numpy as np
 from nptyping import NDArray, UInt8, Int32, Float32, Shape, Bool
 import rasterio
 from rasterio.mask import mask
-from rasterio.windows import Window
-from rasterio.warp import Resampling
-from geoRpro.sent2 import Sentinel2
 
 from typing import Generator, Any, Final, Literal
 
@@ -229,7 +226,8 @@ def apply_mask(arr: NDArray, mask: NDArray, fill_value: int = 0) -> NDArray:
     masked_arr: Any = np.ma.array(arr, mask=mask)
 
     # Fill masked vales with fill_value
-    arr_filled: Any = np.ma.filled(masked_arr, fill_value=fill_value)
+    arr_filled: Any = np.ma.filled(masked_arr, fill_value=fill_value)  # type: ignore
+
     return arr_filled
 
 

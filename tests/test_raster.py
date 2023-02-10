@@ -9,7 +9,7 @@ import geoRpro.raster as rst
 import geoRpro.io as io
 from geoRpro.raster import Indexes
 
-from typing import Generator, Any, Literal
+from typing import Generator, Any, Final
 
 import pdb
 
@@ -35,7 +35,7 @@ def get_shape(poly_param: list) -> Any:
 def test_load_raise_bands_arg_not_a_list(raster_src: Any) -> None:
     """Pass int to bands raise ValueError"""
     with pytest.raises(ValueError):
-        rst.load(raster_src, bands=1)
+        rst.load(raster_src, bands=1)  # type: ignore
 
 
 def test_load_meta_bands(raster_src) -> None:
@@ -112,7 +112,7 @@ def test_load_array_polygon(raster_src) -> None:
 
 
 def test_load_array_mask(raster_src) -> None:
-    arr: NDArray[Any, UInt8]
+    arr: Any
 
     arr, _ = rst.load(raster_src, bands=[1], window=((6, 12), (156, 160)), masked=True)
     expected = np.array(
@@ -189,7 +189,6 @@ def test_mask_vals(raster_src) -> None:
     meta_mask: dict[str, Any]
     arr_mask, meta_mask = rst.mask_vals(arr, meta, [6, 8])
 
-
     expected_data: NDArray[Any, UInt8] = np.array(
         [
             [6, 8, 6, 8],
@@ -200,7 +199,7 @@ def test_mask_vals(raster_src) -> None:
             [6, 6, 6, 5],
         ],
         dtype=np.uint8,
-     )
+    )
 
     expected_mask = np.array(
         [
@@ -216,8 +215,8 @@ def test_mask_vals(raster_src) -> None:
     )
 
     assert meta_mask["nbits"] == 1
-    assert (arr_mask.mask == expected_mask).all()
-    assert (arr_mask.data == expected_data).all()
+    assert (arr_mask.mask == expected_mask).all()  # type: ignore
+    assert (arr_mask.data == expected_data).all()  # type: ignore
 
 
 def test_apply_mask(raster_src) -> None:
@@ -228,26 +227,27 @@ def test_apply_mask(raster_src) -> None:
     meta_mask: dict[str, Any]
     arr_mask, meta_mask = rst.mask_vals(arr_inp, meta_inp, [6, 8])
 
-    arr_out = rst.apply_mask(arr_inp, arr_mask.mask)
+    arr_out = rst.apply_mask(arr_inp, arr_mask.mask)  # type: ignore
 
     expected: NDArray[Any, UInt8] = np.array(
-        [[
-            [0, 0, 0, 0],
-            [0, 0, 0, 50],
-            [0, 9, 0, 29],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 5],
-        ]],
+        [
+            [
+                [0, 0, 0, 0],
+                [0, 0, 0, 50],
+                [0, 9, 0, 29],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 5],
+            ]
+        ],
         dtype=np.uint8,
-     )
+    )
     assert (arr_out == expected).all()
 
 
-def test_get_windows(raster_src):
-    result: Final[list[Any, Any]] = rst.get_windows(raster_src)
+def test_get_windows(raster_src) -> None:
+    result: Final[list[Any]] = rst.get_windows(raster_src)
     assert len(result) == 240
-
 
 
 def test_indexes_ndvi_scale_factor_1000(raster_src) -> None:
@@ -265,7 +265,7 @@ def test_indexes_ndvi_scale_factor_1000(raster_src) -> None:
 
         ndvi: NDArray[Any, Int32] | NDArray[Any, Float32]
 
-        ndvi, _ = indx.ndvi(src_red, src_nir)
+        ndvi, _ = indx.ndvi(src_red, src_nir)self.instructions.get("Scale", 1000)
     expected_ndvi: NDArray[Any, Int32] = np.array(
         [
             [700, 578, 538, 384],
