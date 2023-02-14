@@ -7,6 +7,7 @@ import rasterio
 import geopandas as gpd
 from geoRpro.sent2 import Sentinel2
 import geoRpro.raster as rst
+from typing import Generator, Any, Final, Literal
 
 import pdb
 
@@ -43,18 +44,18 @@ class ProcessBase:
         self.instructions = copy.deepcopy(instructions)
         self.parse_instructions()
         self.get_fpaths()
-        self.outputs = None
+        self.outputs: dict = {}
 
     def parse_instructions(self):
         for k, _ in self.instructions.items():
 
             if k not in self.INSTRUCTIONS:
-                raise ValueError(f'{k} is not a valid argument')
+                raise ValueError(f"{k} is not a valid argument")
 
-        self.inputs = self.instructions.get('Inputs')
-        self.indir = self.instructions.get('Indir')
-        self.outdir = self.instructions.get('Outdir')
-        self.satellite = self.instructions.get('Satellite')
+        self.inputs = self.instructions.get("Inputs")
+        self.indir = self.instructions.get("Indir")
+        self.outdir = self.instructions.get("Outdir")
+        self.satellite = self.instructions.get("Satellite")
 
     def get_fpaths(self):
         """
@@ -68,11 +69,11 @@ class ProcessBase:
             handler_fname = self.__fname_rasters
 
         # mapping band with fpath using Sentinel2 file Parser
-        if self.satellite == 'Sentinel2':
+        if self.satellite == "Sentinel2":
 
-            s10 = Sentinel2(os.path.join(self.indir, 'R10m'))
-            s20 = Sentinel2(os.path.join(self.indir, 'R20m'))
-            s60 = Sentinel2(os.path.join(self.indir, 'R60m'))
+            s10 = Sentinel2(os.path.join(self.indir, "R10m"))
+            s20 = Sentinel2(os.path.join(self.indir, "R20m"))
+            s60 = Sentinel2(os.path.join(self.indir, "R60m"))
 
             handler_sat(s10, s20, s60)
 
@@ -80,7 +81,7 @@ class ProcessBase:
         else:
             handler_fname()
 
-    def run(self):
+    def run(self) -> None | Any:
         """To be implemented by child classes"""
 
     def _create_outdir(self):
@@ -90,7 +91,7 @@ class ProcessBase:
             outdir = self.outdir
 
         if not os.path.exists(outdir):
-            print(f'Creating {outdir}')
+            print(f"Creating {outdir}")
             os.makedirs(outdir)
 
         return outdir
@@ -107,8 +108,10 @@ class ProcessBase:
                         try:
                             values[idx] = s60.get_fpath(band_name)
                         except KeyError:
-                            raise ValueError(f"Cannot find band: '{band_name}'. Please \
-                                    provide valid Sentinel2 band name.")
+                            raise ValueError(
+                                f"Cannot find band: '{band_name}'. Please \
+                                    provide valid Sentinel2 band name."
+                            )
 
     def __sent2_raster(self, s10, s20, s60):
         for name, band_name in self.inputs.items():
@@ -121,8 +124,10 @@ class ProcessBase:
                     try:
                         self.inputs[name] = s60.get_fpath(band_name)
                     except KeyError:
-                        raise ValueError(f"Cannot find band: '{band_name}'. Please \
-                                provide valid Sentinel2 band name.")
+                        raise ValueError(
+                            f"Cannot find band: '{band_name}'. Please \
+                                provide valid Sentinel2 band name."
+                        )
 
     def __fname_raster(self):
         for name, file_name in self.inputs.items():

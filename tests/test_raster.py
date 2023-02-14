@@ -265,7 +265,7 @@ def test_indexes_ndvi_scale_factor_1000(raster_src) -> None:
 
         ndvi: NDArray[Any, Int32] | NDArray[Any, Float32]
 
-        ndvi, _ = indx.ndvi(src_red, src_nir)self.instructions.get("Scale", 1000)
+        ndvi, _ = indx.ndvi(src_red, src_nir)  # self.instructions.get("Scale", 1000)
     expected_ndvi: NDArray[Any, Int32] = np.array(
         [
             [700, 578, 538, 384],

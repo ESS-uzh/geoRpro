@@ -376,8 +376,8 @@ class RExtract(ProcessBase):
         if srcs[0].crs.to_epsg() != self.points.crs.to_epsg():
             raise ValueError("Raster and Points location must have the same CRS")
 
-    def run(self):
-        self.outputs = {}
+    def run(self) -> Any:
+        self.outputs: dict = {}
         with ExitStack() as stack_files:
             for name, values in self.inputs.items():
                 print(f"Start extract procedure for {name}")
@@ -391,8 +391,8 @@ class RExtract(ProcessBase):
 
                 fpath = os.path.join(outdir, name + ".json")
                 extracted.save(fpath)
-                # io.write_raster(srcs, metadata, fpath)
                 self.outputs[name] = fpath
+        return extracted
 
 
 if __name__ == "__main__":
