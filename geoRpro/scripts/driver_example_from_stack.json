@@ -1,0 +1,24 @@
+{
+    "RExtractBands": {
+        "Inputs": {
+            "band1_from_stack": "stack1.tif",
+            "band2_from_stack": "stack1.tif"
+        },
+        "Indir": "/home/diego/work/dev/data/test_data",
+        "Outdir": "/home/diego/work/dev/data/test_data_out_new",
+        "Bands": [
+            1,
+            2
+        ]
+    },
+    "RIndex": {
+        "Inputs": {
+            "ndvi": [
+                "band1_from_stack.tif",
+                "band2_from_stack.tif"
+            ]
+        },
+        "Scale": 1000,
+        "Indir": "/home/diego/work/dev/data/test_data_out_new"
+    }
+}

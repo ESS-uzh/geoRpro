@@ -22,7 +22,6 @@ def raster_src() -> Generator[Any, None, None]:
 
 
 def test_rextract(cleanup_files) -> None:
-
     inst: Final[dict[str, Any]] = {
         "Inputs": {"extracted_data": ["RGB.byte.tif"]},
         "Indir": "./data",
@@ -31,7 +30,7 @@ def test_rextract(cleanup_files) -> None:
         "ClassName": "test_points",
         "Id": 1,
     }
-    rextract: Any = prc.RExtract(inst)
+    rextract: Any = prc.RExtractPoints(inst)
     extracted = rextract.run()
     import pdb
 

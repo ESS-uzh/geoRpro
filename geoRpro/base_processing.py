@@ -1,3 +1,5 @@
+from typing import Generator, Any, Final, Literal
+
 import os
 import copy
 import logging
@@ -7,7 +9,6 @@ import rasterio
 import geopandas as gpd
 from geoRpro.sent2 import Sentinel2
 import geoRpro.raster as rst
-from typing import Generator, Any, Final, Literal
 
 import pdb
 
@@ -42,17 +43,16 @@ class ProcessBase:
 
     def __init__(self, instructions) -> None:
         self.instructions = copy.deepcopy(instructions)
-        self.parse_instructions()
+        self._parse_instructions()
         self.get_fpaths()
         self.outputs: dict = {}
 
-    def parse_instructions(self):
+    def _parse_instructions(self) -> None:
         for k, _ in self.instructions.items():
-
-            if k not in self.INSTRUCTIONS:
+            if k not in self.INSTRUCTIONS:  # type: ignore
                 raise ValueError(f"{k} is not a valid argument")
 
-        self.inputs = self.instructions.get("Inputs")
+        self.inputs: dict[str, Any] = self.instructions.get("Inputs")
         self.indir = self.instructions.get("Indir")
         self.outdir = self.instructions.get("Outdir")
         self.satellite = self.instructions.get("Satellite")
@@ -70,7 +70,6 @@ class ProcessBase:
 
         # mapping band with fpath using Sentinel2 file Parser
         if self.satellite == "Sentinel2":
-
             s10 = Sentinel2(os.path.join(self.indir, "R10m"))
             s20 = Sentinel2(os.path.join(self.indir, "R20m"))
             s60 = Sentinel2(os.path.join(self.indir, "R60m"))

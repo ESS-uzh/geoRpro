@@ -67,7 +67,7 @@ class RPrepro(ProcessBase):
         "Res",
         "Polygon",
         "Window",
-        "Layer",
+        "Layers",
     }
 
     def __init__(self, instructions):
@@ -75,7 +75,8 @@ class RPrepro(ProcessBase):
         self.res = None
         self._polygon = None
         self.window = None
-        self.layer = None
+        self.layers = None
+        self.extract_single_layers = None
         self._parse_args()
 
     @property
@@ -84,7 +85,6 @@ class RPrepro(ProcessBase):
 
     @polygon.setter
     def polygon(self, poly_param):
-
         shape_file = poly_param[0]
         crs = poly_param[1]
         index = poly_param[2]
@@ -104,16 +104,13 @@ class RPrepro(ProcessBase):
 
     def run(self):
         with ExitStack() as stack_files:
-
             self.outputs = {
                 k: stack_files.enter_context(rasterio.open(v))
                 for (k, v) in self.inputs.items()
             }
 
             with ExitStack() as stack_action:
-
                 for name, src in self.outputs.items():
-
                     print(f"Raster: {name} has {src.res[0]} m resolution..")
 
                     # resample to match res param
@@ -125,7 +122,7 @@ class RPrepro(ProcessBase):
                         arr, meta = rst.load_resample(src, scale_factor)
                         src = stack_action.enter_context(io.to_src(arr, meta))
 
-                    if self.layer:
+                    if self.layers:
                         print(f"Selected layer: {self.layer}")
                         arr, meta = rst.load(src, bands=self.layer)
                         src = stack_action.enter_context(io.to_src(arr, meta))
@@ -343,7 +340,32 @@ class RIndex(ProcessBase):
                 self.outputs[name] = fpath
 
 
-class RExtract(ProcessBase):
+class RExtractBands(ProcessBase):
+    INSTRUCTIONS: set[str] = {"Inputs", "Indir", "Outdir", "Bands"}
+
+    def __init__(self, instructions) -> None:
+        super().__init__(instructions)
+        self.bands: list = self.instructions.get("Bands")
+
+    def run(self) -> None:
+        with ExitStack() as stack_files:
+            self.outputs = {
+                k: stack_files.enter_context(rasterio.open(v))
+                for (k, v) in self.inputs.items()
+            }
+
+            for idx, (name, src) in enumerate(self.outputs.items()):
+                # print(f"Band: {name}")
+                arr, meta = rst.load(src, bands=[idx + 1])
+
+                outdir = self._create_outdir()
+
+                fpath = os.path.join(outdir, name + ".tif")
+                io.write_array_as_raster(arr, meta, fpath)
+                self.outputs[name] = fpath
+
+
+class RExtractPoints(ProcessBase):
     INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Points", "ClassName", "Id", "Masked"}
 
     def __init__(self, instructions):
@@ -357,7 +379,6 @@ class RExtract(ProcessBase):
 
     @points.setter
     def points(self, points_param) -> None:
-
         shape_file = points_param[0]
         crs = points_param[1]
 
@@ -372,7 +393,6 @@ class RExtract(ProcessBase):
         self._points = gdf
 
     def _check_metadata(self, srcs) -> None:
-
         if srcs[0].crs.to_epsg() != self.points.crs.to_epsg():
             raise ValueError("Raster and Points location must have the same CRS")
 
@@ -396,7 +416,6 @@ class RExtract(ProcessBase):
 
 
 if __name__ == "__main__":
-
     ORIGIN: Final[
         str
     ] = "/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA"
