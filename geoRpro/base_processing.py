@@ -1,4 +1,4 @@
-from typing import Generator, Any, Final, Literal
+from typing import Generator, Any, Final, Literal, Callable
 
 import os
 import copy
@@ -41,29 +41,29 @@ class ProcessBase:
 
     """
 
-    def __init__(self, instructions) -> None:
-        self.instructions = copy.deepcopy(instructions)
+    def __init__(self, instructions: dict[str, Any]) -> None:
+        self.instructions: dict[str, Any] = copy.deepcopy(instructions)
         self._parse_instructions()
         self.get_fpaths()
-        self.outputs: dict = {}
+        self.outputs: dict[str, Any] = {}
 
     def _parse_instructions(self) -> None:
         for k, _ in self.instructions.items():
             if k not in self.INSTRUCTIONS:  # type: ignore
                 raise ValueError(f"{k} is not a valid argument")
 
-        self.inputs: dict[str, Any] = self.instructions.get("Inputs")
-        self.indir = self.instructions.get("Indir")
-        self.outdir = self.instructions.get("Outdir")
-        self.satellite = self.instructions.get("Satellite")
+        self.inputs: Any = self.instructions.get("Inputs")
+        self.indir: Any = self.instructions.get("Indir")
+        self.outdir: Any | None = self.instructions.get("Outdir")
+        self.satellite: Any | None = self.instructions.get("Satellite")
 
-    def get_fpaths(self):
+    def get_fpaths(self) -> None:
         """
         Re-map inputs attribute to "name": fullpath
         """
 
-        handler_sat = self.__sent2_raster
-        handler_fname = self.__fname_raster
+        handler_sat: Callable = self.__sent2_raster
+        handler_fname: Callable = self.__fname_raster
         if isinstance(list(self.inputs.values())[0], list):
             handler_sat = self.__sent2_rasters
             handler_fname = self.__fname_rasters

@@ -1,16 +1,19 @@
+from typing import Generator, Any, Final, Literal, Callable
+from nptyping import NDArray, UInt8, Int32, Float32, Shape, Bool
+
 import os
 import copy
 import logging
 from contextlib import ExitStack
 
 import rasterio
+from rasterio.io import DatasetReader
 import geopandas as gpd
 from geoRpro.sent2 import Sentinel2
 import geoRpro.raster as rst
 import geoRpro.extract as ext
 import geoRpro.io as io
 from geoRpro.base_processing import ProcessBase
-from typing import Generator, Any, Final, Literal
 
 import pdb
 
@@ -59,7 +62,7 @@ class RPrepro(ProcessBase):
 
     """
 
-    INSTRUCTIONS = {
+    INSTRUCTIONS: Final[set[str]] = {
         "Inputs",
         "Indir",
         "Outdir",
@@ -70,21 +73,20 @@ class RPrepro(ProcessBase):
         "Layers",
     }
 
-    def __init__(self, instructions):
+    def __init__(self, instructions: dict[Any, Any]) -> None:
         super().__init__(instructions)
         self.res = None
         self._polygon = None
         self.window = None
         self.layers = None
-        self.extract_single_layers = None
         self._parse_args()
 
     @property
-    def polygon(self):
+    def polygon(self) -> Any | None:
         return self._polygon
 
     @polygon.setter
-    def polygon(self, poly_param):
+    def polygon(self, poly_param) -> None:
         shape_file = poly_param[0]
         crs = poly_param[1]
         index = poly_param[2]
@@ -289,16 +291,17 @@ class RStack(ProcessBase):
 
 
 class RIndex(ProcessBase):
-    INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Satellite", "Scale"}
+    INSTRUCTIONS: set[str] = {"Inputs", "Indir", "Outdir", "Satellite", "Scale"}
 
-    def __init__(self, instructions):
+    def __init__(self, instructions) -> None:
         super().__init__(instructions)
-        self.scale_factor = self.instructions.get("Scale", 1000)
+        self.scale_factor: Literal[1, 1000] = self.instructions.get("Scale", 1000)
 
-    def _check_metadata(self, srcs):
-        test_src = srcs[0]
-        end_srcs = srcs[1:]
+    def _check_metadata(self, srcs) -> None:
+        test_src: DatasetReader = srcs[0]
+        end_srcs: list[DatasetReader] = srcs[1:]
 
+        src: DatasetReader
         for src in end_srcs:
             if src.crs.to_epsg() != test_src.crs.to_epsg():
                 raise ValueError("Raster data must have the same CRS")
@@ -307,7 +310,9 @@ class RIndex(ProcessBase):
             if src.res != test_src.res:
                 raise ValueError("Raster data must have the same spacial resolution")
 
-    def calc_index(self, name, metadata, scale):
+    def calc_index(
+        self, name: str, metadata: dict[str, Any], scale: Literal[1, 1000]
+    ) -> Callable:
         index = rst.Indexes(metadata, scale)
         if name == "ndvi":
             return index.ndvi
@@ -319,18 +324,25 @@ class RIndex(ProcessBase):
             return index.ndwi
         raise ValueError(f"Index {name} does not exist")
 
-    def run(self):
-        self.outputs = {}
+    def run(self) -> None:
+        self.outputs: dict[str, Any] = {}
+
         with ExitStack() as stack_files:
             for name, values in self.inputs.items():
                 print(f"Calculating {name}")
-                srcs = [stack_files.enter_context(rasterio.open(v)) for v in values]
+                srcs: list[DatasetReader] = [
+                    stack_files.enter_context(rasterio.open(v)) for v in values
+                ]
                 self._check_metadata(srcs)
                 self.outputs[name] = srcs
-                metadata_index = srcs[0].profile
+                metadata_index: dict[str, Any] = srcs[0].profile
                 metadata_index.update(driver="GTiff")
 
-                index = self.calc_index(name, metadata_index, scale=self.scale_factor)
+                index: Callable = self.calc_index(
+                    name, metadata_index, scale=self.scale_factor
+                )
+                arr: NDArray
+                meta: dict[str, Any]
                 arr, meta = index(*srcs)
 
                 outdir = self._create_outdir()

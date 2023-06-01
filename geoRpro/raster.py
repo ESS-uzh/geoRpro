@@ -135,7 +135,6 @@ def load_resample(
 def load_polygon(
     src: Any, geom: Any, crop: bool = True
 ) -> tuple[NDArray[Any, Any], dict[str, Any]]:
-
     """
     Load a raster array from an input shape
 
@@ -275,7 +274,6 @@ class Indexes:
     def __init__(
         self, metadata: dict[str, Any], scale_factor: Literal[1, 1000] = 1000
     ) -> None:
-
         self.metadata: dict[str, Any] = metadata
         self.scale_factor = scale_factor
 
@@ -304,7 +302,6 @@ class Indexes:
     def ndvi(
         self, red_src: Any, nir_src: Any
     ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
-
         # to do: check for rasters to be (1, width, height)
         redB: NDArray[Any, Any] = red_src.read()
         nirB: NDArray[Any, Any] = nir_src.read()
@@ -321,7 +318,6 @@ class Indexes:
     def nbr(
         self, nir_src, swir_src
     ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
-
         """Normalized Burn Ratio"""
         nirB: NDArray[Any, Any] = nir_src.read()
         swirB: NDArray[Any, Any] = swir_src.read()
@@ -337,7 +333,6 @@ class Indexes:
     def bsi(
         self, blue_src, red_src, nir_src, swir_src
     ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
-
         """Bare Soil Index (BSI)"""
         blueB = blue_src.read()
         redB = red_src.read()
@@ -359,7 +354,6 @@ class Indexes:
     def ndwi(
         self, green_src, nir_src
     ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
-
         """Normalized Difference Water Index (NDWI)"""
         greenB = green_src.read()
         nirB = nir_src.read()
@@ -371,3 +365,163 @@ class Indexes:
         where_are_NaNs = np.isnan(ndwi)
         ndwi[where_are_NaNs] = 0
         return self._scale_and_round(ndwi)
+
+    def cai(
+        self, swir1_src: Any, swir2_src: Any, swir3_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Cellulose Absorption Index (CAI)"""
+        swir1B: NDArray[Any, Any] = swir1_src.read()
+        swir2B: NDArray[Any, Any] = swir2_src.read()
+        swir3B: NDArray[Any, Any] = swir3_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        cai: NDArray[Any, Float32] = (
+            0.5
+            * (swir1B.astype(np.float32) - swir2B.astype(np.float32))
+            / (swir3B.astype(np.float32))
+        )
+        # replace nan with 0
+        where_are_NaNs: NDArray[Any, Bool] = np.isnan(cai)
+        cai[where_are_NaNs] = 0
+
+        return self._scale_and_round(cai)
+
+    def evi(
+        self, nir_src, red_src, blue_src
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Enhanced Vegetation Index (EVI)"""
+        nirB = nir_src.read()
+        redB = red_src.read()
+        blueB = blue_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        evi: NDArray[Any, Float32] = (
+            2.5
+            * (nirB.astype(np.float32) - redB.astype(np.float32))
+            / (
+                nirB.astype(np.float32)
+                + 6.0 * redB.astype(np.float32)
+                - 7.5 * blueB.astype(np.float32)
+                + 1
+            )
+        )
+        # replace nan with 0
+        where_are_NaNs = np.isnan(evi)
+        evi[where_are_NaNs] = 0
+        return self._scale_and_round(evi)
+
+    def mndvi705(
+        self, red1_src: Any, red2_src: Any, violet_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Modified Red Edge Normalized Difference Vegetation Index (mNDVI705)"""
+        red1B: NDArray[Any, Any] = red1_src.read()
+        red2B: NDArray[Any, Any] = red2_src.read()
+        violetB: NDArray[Any, Any] = violet_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        mndvi705: NDArray[Any, Float32] = (
+            red1B.astype(np.float32) - red2B.astype(np.float32)
+        ) / (
+            red1B.astype(np.float32)
+            + red2B.astype(np.float32)
+            - 2 * violetB.astype(np.float32)
+        )
+        # replace nan with 0
+        where_are_NaNs: NDArray[Any, Bool] = np.isnan(mndvi705)
+        mndvi705[where_are_NaNs] = 0
+
+        return self._scale_and_round(mndvi705)
+
+    def ndmi(
+        self, nir_src: Any, swir_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Normalized Difference Moisture Index (NDMI)"""
+        nirB = nir_src.read()
+        swirB = swir_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        ndmi: NDArray[Any, Float32] = (
+            nirB.astype(np.float32) - swirB.astype(np.float32)
+        ) / (nirB.astype(np.float32) + swirB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(ndmi)
+        ndmi[where_are_NaNs] = 0
+        return self._scale_and_round(ndmi)
+
+    def ndvi705(
+        self, red1_src: Any, red2_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Red Edge Normalized Difference Vegetation Index (NDVI705)"""
+        red1B: NDArray[Any, Any] = red1_src.read()
+        red2B: NDArray[Any, Any] = red2_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        ndvi705: NDArray[Any, Float32] = (
+            red1B.astype(np.float32) - red2B.astype(np.float32)
+        ) / (red1B.astype(np.float32) + red2B.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs: NDArray[Any, Bool] = np.isnan(ndvi705)
+        ndvi705[where_are_NaNs] = 0
+
+        return self._scale_and_round(ndvi705)
+
+    def rvsi(
+        self, red1_src: Any, red2_src: Any, red3_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Red-Edge Stress Vegetation Index (RVSI)"""
+        red1B: NDArray[Any, Any] = red1_src.read()
+        red2B: NDArray[Any, Any] = red2_src.read()
+        red3B: NDArray[Any, Any] = red3_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        rvsi: NDArray[Any, Float32] = (
+            red1B.astype(np.float32) + red2B.astype(np.float32)
+        ) / (2) - red3B.astype(np.float32)
+        # replace nan with 0
+        where_are_NaNs: NDArray[Any, Bool] = np.isnan(rvsi)
+        rvsi[where_are_NaNs] = 0
+        return self._scale_and_round(rvsi)
+
+    def vari(
+        self, green_src: Any, red_src: Any, blue_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Visible Atmospherically Resistant Index (VARI)"""
+        greenB = green_src.read()
+        redB = red_src.read()
+        blueB = blue_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        vari: NDArray[Any, Float32] = (
+            greenB.astype(np.float32) - redB.astype(np.float32)
+        ) / (
+            greenB.astype(np.float32)
+            + redB.astype(np.float32)
+            - blueB.astype(np.float32)
+        )
+        # replace nan with 0
+        where_are_NaNs = np.isnan(vari)
+        vari[where_are_NaNs] = 0
+        return self._scale_and_round(vari)
+
+    def vgi(
+        self, green_src: Any, red_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Visible Green Index (VGI)"""
+        greenB = green_src.read()
+        redB = red_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        vgi: NDArray[Any, Float32] = (
+            greenB.astype(np.float32) - redB.astype(np.float32)
+        ) / (greenB.astype(np.float32) + redB.astype(np.float32))
+        # replace nan with 0
+        where_are_NaNs = np.isnan(vgi)
+        vgi[where_are_NaNs] = 0
+        return self._scale_and_round(vgi)
+
+    def wi(
+        self, nir1_src: Any, nir2_src: Any
+    ) -> tuple[NDArray[Any, Int32] | NDArray[Any, Float32], dict[str, Any]]:
+        """Water Index (WI)"""
+        nir1B = nir1_src.read()
+        nir2B = nir2_src.read()
+        np.seterr(divide="ignore", invalid="ignore")
+        wi: NDArray[Any, Float32] = (nir1B.astype(np.float32)) / (
+            nir2B.astype(np.float32)
+        )
+        # replace nan with 0
+        where_are_NaNs = np.isnan(wi)
+        wi[where_are_NaNs] = 0
+        return self._scale_and_round(wi)
