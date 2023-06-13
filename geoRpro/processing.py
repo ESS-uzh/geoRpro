@@ -322,6 +322,24 @@ class RIndex(ProcessBase):
             return index.bsi
         if name == "ndwi":
             return index.ndwi
+        if name == "cai":
+            return index.cai
+        if name == "evi":
+            return index.evi
+        if name == "mndvi705":
+            return index.mndvi705
+        if name == "ndmi":
+            return index.ndmi
+        if name == "ndvi705":
+            return index.ndvi705
+        if name == "rvsi":
+            return index.rvsi
+        if name == "vari":
+            return index.vari
+        if name == "vgi":
+            return index.vgi
+        if name == "wi":
+            return index.wi
         raise ValueError(f"Index {name} does not exist")
 
     def run(self) -> None:
