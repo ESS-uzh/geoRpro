@@ -1,4 +1,4 @@
-from typing import Generator, Any, Final, Literal, Callable
+from typing import Generator, Any, Final, Literal, Callable, List
 from nptyping import NDArray, UInt8, Int32, Float32, Shape, Bool
 
 import os
@@ -375,7 +375,7 @@ class RExtractBands(ProcessBase):
 
     def __init__(self, instructions) -> None:
         super().__init__(instructions)
-        self.bands: list = self.instructions.get("Bands")
+        self.bands: Any = self.instructions.get("Bands")
 
     def run(self) -> None:
         with ExitStack() as stack_files:

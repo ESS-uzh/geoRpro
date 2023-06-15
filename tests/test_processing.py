@@ -16,7 +16,7 @@ import pdb
 
 @pytest.fixture
 def raster_src() -> Generator[Any, None, None]:
-    src: Any = rasterio.open("./data/RGB.byte.tif")
+    src: Any = rasterio.open("data/RGB.byte.tif")
     yield src
     src.close()
 
@@ -24,15 +24,14 @@ def raster_src() -> Generator[Any, None, None]:
 def test_rextract(cleanup_files) -> None:
     inst: Final[dict[str, Any]] = {
         "Inputs": {"extracted_data": ["RGB.byte.tif"]},
-        "Indir": "./data",
-        "Outdir": "./data/out",
-        "Points": ["./data/pointsToExtract.shp", 32618],
+        "Indir": "data",
+        "Outdir": "data/out",
+        "Points": ["data/pointsToExtract.shp", 32618],
         "ClassName": "test_points",
         "Id": 1,
     }
     rextract: Any = prc.RExtractPoints(inst)
     extracted = rextract.run()
-    import pdb
 
     expected_X: NDArray[Any, Float64] = np.array(
         [

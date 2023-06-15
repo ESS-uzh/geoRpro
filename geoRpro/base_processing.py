@@ -3,12 +3,9 @@ from typing import Generator, Any, Final, Literal, Callable
 import os
 import copy
 import logging
-from contextlib import ExitStack
 
-import rasterio
-import geopandas as gpd
+from pathlib import Path
 from geoRpro.sent2 import Sentinel2
-import geoRpro.raster as rst
 
 import pdb
 
@@ -44,7 +41,7 @@ class ProcessBase:
     def __init__(self, instructions: dict[str, Any]) -> None:
         self.instructions: dict[str, Any] = copy.deepcopy(instructions)
         self._parse_instructions()
-        self.get_fpaths()
+        self._get_fpaths()
         self.outputs: dict[str, Any] = {}
 
     def _parse_instructions(self) -> None:
@@ -57,16 +54,16 @@ class ProcessBase:
         self.outdir: Any | None = self.instructions.get("Outdir")
         self.satellite: Any | None = self.instructions.get("Satellite")
 
-    def get_fpaths(self) -> None:
+    def _get_fpaths(self) -> None:
         """
         Re-map inputs attribute to "name": fullpath
         """
 
-        handler_sat: Callable = self.__sent2_raster
-        handler_fname: Callable = self.__fname_raster
+        handler_sat: Callable = self._sent2_raster
+        handler_fname: Callable = self._fname_raster
         if isinstance(list(self.inputs.values())[0], list):
-            handler_sat = self.__sent2_rasters
-            handler_fname = self.__fname_rasters
+            handler_sat = self._sent2_rasters
+            handler_fname = self._fname_rasters
 
         # mapping band with fpath using Sentinel2 file Parser
         if self.satellite == "Sentinel2":
@@ -95,7 +92,7 @@ class ProcessBase:
 
         return outdir
 
-    def __sent2_rasters(self, s10, s20, s60):
+    def _sent2_rasters(self, s10, s20, s60):
         for name, values in self.inputs.items():
             for idx, band_name in enumerate(values):
                 try:
@@ -112,7 +109,7 @@ class ProcessBase:
                                     provide valid Sentinel2 band name."
                             )
 
-    def __sent2_raster(self, s10, s20, s60):
+    def _sent2_raster(self, s10, s20, s60):
         for name, band_name in self.inputs.items():
             try:
                 self.inputs[name] = s10.get_fpath(band_name)
@@ -128,11 +125,18 @@ class ProcessBase:
                                 provide valid Sentinel2 band name."
                         )
 
-    def __fname_raster(self):
-        for name, file_name in self.inputs.items():
-            self.inputs[name] = os.path.join(self.indir, file_name)
+    def _get_full_path(self, file_str):
+        p = Path(file_str)
+        if p.is_file():
+            return str(p)
+        else:
+            return str(Path(self.indir, p.name))
 
-    def __fname_rasters(self):
-        for name, values in self.inputs.items():
-            for idx, file_name in enumerate(values):
-                values[idx] = os.path.join(self.indir, file_name)
+    def _fname_raster(self):
+        for name, file_str in self.inputs.items():
+            self.inputs[name] = self._get_full_path(file_str)
+
+    def _fname_rasters(self):
+        for _, values in self.inputs.items():
+            for idx, file_str in enumerate(values):
+                values[idx] = self._get_full_path(file_str)
