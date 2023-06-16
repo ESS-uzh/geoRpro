@@ -1,3 +1,5 @@
+# Routines dealing with open DatasetReader or numpy array
+
 import logging
 
 import numpy as np
