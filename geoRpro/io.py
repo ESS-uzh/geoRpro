@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from contextlib import ExitStack
 
 import rasterio
+import geoRpro.raster as rst
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -57,10 +58,21 @@ def write_raster(srcs, meta, fpath, mask=False):
             meta["driver"] = "GTiff"
 
         with rasterio.open(fpath, "w", **meta) as dst:
-            for _id, src in enumerate(srcs, start=1):
-                print(f"Writing to disk src with res: {src.res}")
-                arr = src.read(masked=mask)
-                dst.write_band(_id, arr[0, :, :].astype(meta["dtype"]))
+            count = 1
+            for src in srcs:
+                if src.meta["count"] > 1:
+                    stack_count = 1
+                    while stack_count <= src.meta["count"]:
+                        print(f"Writing to disk src with res: {src.res}")
+                        arr, _ = rst.load(src, bands=[stack_count], masked=mask)
+                        dst.write_band(stack_count, arr[0, :, :].astype(meta["dtype"]))
+                        stack_count += 1
+                    count = stack_count
+                else:
+                    print(f"Writing to disk src with res: {src.res}")
+                    arr = src.read(masked=mask)
+                    dst.write_band(count, arr[0, :, :].astype(meta["dtype"]))
+                    count += 1
 
     return fpath
 
