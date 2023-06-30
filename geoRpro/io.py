@@ -3,6 +3,9 @@ from contextlib import contextmanager
 from contextlib import ExitStack
 
 import rasterio
+import os
+from pathlib import Path
+from glob import glob
 import geoRpro.raster as rst
 
 logger = logging.getLogger(__name__)
@@ -128,3 +131,19 @@ def get_metadata(fpath):
     """
     with rasterio.open(fpath, "r") as dst:
         return dst.profile
+
+def delete_rasters(dpath, *keep):
+
+    fpaths_all = [Path(f).resolve() for f in glob(os.path.join(dpath, "*.tif"))]
+    if keep:
+        fpaths_to_keep = [Path(dpath, name+".tif").resolve() for name in keep]
+        fpaths_to_delete = set(fpaths_all).difference(fpaths_to_keep)
+    else:
+        fpaths_to_delete = fpaths_all
+
+    for fpath in fpaths_to_delete:
+        try:
+            os.remove(fpath)
+        except IOError as e:
+            print(e)
+
