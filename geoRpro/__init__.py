@@ -1,12 +1,12 @@
-import logging
-import sys
-from warnings import filterwarnings
-
-filterwarnings(
-    action="ignore",
-    category=DeprecationWarning,
-    # message="`np.bool` is a deprecated alias",
-)
+# import logging
+# import sys
+# from warnings import filterwarnings
+#
+# filterwarnings(
+#    action="ignore",
+#    category=DeprecationWarning,
+#    # message="`np.bool` is a deprecated alias",
+# )
 
 # root_logger = logging.getLogger()
 # root_logger.setLevel(logging.INFO)
@@ -21,3 +21,4 @@ filterwarnings(
 #
 # root_logger.addHandler(file_handler)
 # root_logger.addHandler(console_handler)
+import geoRpro.processing

@@ -2,14 +2,19 @@ from typing import Generator, Any, Final, Literal, Callable, List
 from nptyping import NDArray, UInt8, Int32, Float32, Shape, Bool
 
 import os
-import copy
 import logging
 from contextlib import ExitStack
 
 import rasterio
+import random
+from shapely.geometry import Polygon, Point
 from rasterio.io import DatasetReader
+
+import os
+
+os.environ["USE_PYGEOS"] = "0"
 import geopandas as gpd
-from geoRpro.sent2 import Sentinel2
+
 import geoRpro.raster as rst
 import geoRpro.extract as ext
 import geoRpro.io as io
@@ -166,11 +171,12 @@ class RMask(ProcessBase):
 
     """
 
-    INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Satellite", "Values"}
+    INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Satellite", "Values", "Invert"}
 
     def __init__(self, instructions):
         super().__init__(instructions)
         self.mask_val = self.instructions.get("Values")
+        self.invert = self.instructions.get("Invert")
 
     def run(self):
         with ExitStack() as stack_files:
@@ -183,11 +189,14 @@ class RMask(ProcessBase):
                 print(f"Masking: {name}")
                 arr, meta = rst.load(src)
                 arr_mask, meta_mask = rst.mask_vals(arr, meta, self.mask_val)
+                mask = arr_mask.mask
+                if self.invert:
+                    mask = ~mask
 
                 outdir = self._create_outdir()
 
                 fpath = os.path.join(outdir, name + ".tif")
-                io.write_array_as_raster(arr_mask.mask, meta_mask, fpath)
+                io.write_array_as_raster(mask, meta_mask, fpath)
                 self.outputs[name] = fpath
 
 
@@ -398,9 +407,15 @@ class RExtractBands(ProcessBase):
 class RExtractPoints(ProcessBase):
     INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Points", "ClassName", "Id", "Masked"}
 
+    """
+    ClassName: str -> this will be added to gdf
+    Id: int -> this will be added to gdf
+    Points: list -> [shape file, CRS of the raster (the gdf will be transformed to the new CRS)] 
+    """
+
     def __init__(self, instructions):
         super().__init__(instructions)
-        self.points = self.instructions.get("Points")
+        self.points = self.instructions.get("Points")  # shape file and the final CRS
         self.masked = self.instructions.get("Masked", 9999)
 
     @property
@@ -411,6 +426,9 @@ class RExtractPoints(ProcessBase):
     def points(self, points_param) -> None:
         shape_file = points_param[0]
         crs = points_param[1]
+        import pdb
+
+        pdb.set_trace()
 
         gdf = gpd.read_file(shape_file)
         gdf = gdf.to_crs(f"EPSG:{crs}")
@@ -431,6 +449,80 @@ class RExtractPoints(ProcessBase):
         with ExitStack() as stack_files:
             for name, values in self.inputs.items():
                 print(f"Start extract procedure for {name}")
+                srcs = [stack_files.enter_context(rasterio.open(v)) for v in values]
+                self._check_metadata(srcs)
+                self.outputs[name] = srcs
+
+                extracted = ext.DataExtractor.extract(srcs[0], self.points, self.masked)
+
+                outdir = self._create_outdir()
+
+                fpath = os.path.join(outdir, name + ".json")
+                extracted.save(fpath)
+                self.outputs[name] = fpath
+        return extracted
+
+
+class RRandomizePoints(ProcessBase):
+    INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Points"}
+
+    """
+    ClassName: str -> this will be added to gdf
+    Id: int -> this will be added to gdf
+    Points: list -> [shape file, CRS of the raster (the gdf will be transformed to the new CRS)] 
+    """
+
+    def __init__(self, instructions):
+        super().__init__(instructions)
+        self.points = self.instructions.get("Points")  # shape file and the final CRS
+        self.masked = self.instructions.get("Masked", 9999)
+
+    @property
+    def points(self):
+        return self._points
+
+    @points.setter
+    def points(self, points_param) -> None:
+        shape_file = points_param[0]
+        crs = points_param[1]
+        import pdb
+
+        pdb.set_trace()
+
+        gdf = gpd.read_file(shape_file)
+        gdf = gdf.to_crs(f"EPSG:{crs}")
+        self.classname = self.instructions.get("ClassName")
+        self.id = self.instructions.get("Id")
+
+        gdf["classname"] = self.classname
+        gdf["id"] = self.id
+
+        self._points = gdf
+
+    def create_random_points(poly, number):
+        points_extracted = []
+        for idx in data.y:  # data.y has index location of extracted points
+            points_extracted.append(gdf.loc[idx, "geometry"])
+
+        min_x, min_y, max_x, max_y = poly.bounds
+        points = []
+        while len(points) < number:
+            random_point = Point(
+                [random.uniform(min_x, max_x), random.uniform(min_y, max_y)]
+            )
+            if random_point not in extracted:
+                points.append(random_point)
+        return points
+
+    def _check_metadata(self, srcs) -> None:
+        if srcs[0].crs.to_epsg() != self.points.crs.to_epsg():
+            raise ValueError("Raster and Points location must have the same CRS")
+
+    def run(self) -> Any:
+        self.outputs: dict = {}
+        with ExitStack() as stack_files:
+            for name, values in self.inputs.items():
+                print(f"Start randomize procedure")
                 srcs = [stack_files.enter_context(rasterio.open(v)) for v in values]
                 self._check_metadata(srcs)
                 self.outputs[name] = srcs

@@ -1,0 +1,22 @@
+{
+    "RExtractBands": {
+        "Inputs": {
+            "band1": "stack1.tif"
+        },
+        "Indir": "/home/diego/work/dev/data/test_data",
+        "Outdir": "/home/diego/work/dev/data/test_data_out_new",
+        "Bands": [
+            1
+        ]
+    },
+    "RMask": {
+        "Inputs": {
+            "mask": "band1.tif"
+        },
+        "Indir": "/home/diego/work/dev/data/test_data_out_new",
+        "Values": [
+            9999
+        ],
+        "Invert": "True"
+    }
+}
