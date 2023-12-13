@@ -54,12 +54,14 @@ class DataExtractor:
 
     """
 
-    def __init__(self, X, y, labels_map):
+    def __init__(self, X, y, labels_map, extracted_points, indexes_extracted_points):
 
         self.X = X
         self.y = y
         self.labels_map = labels_map
         self.label_ids, self.label_ids_count = np.unique(self.y, return_counts=True)
+        self.extracted_points = extracted_points
+        self.indexes_extracted_points = indexes_extracted_points
 
     def save(self, fpath):
         json_arr = to_json(
@@ -181,6 +183,8 @@ class DataExtractor:
         Return:
            An instance of the DataExtractor class
         """
+        extracted_points = []
+        indexes_extracted_points = []
         # Numpy array of shapely objects
         geoms = gdf.geometry.values
 
@@ -214,6 +218,9 @@ class DataExtractor:
                 )
                 continue
 
+            extracted_points.append(geom)
+            indexes_extracted_points.append(index)
+
             # reshape the array to [pixel values, band_count]
             out_image_reshaped = out_image.reshape(-1, src.count)
             # print(f"Extracted values {out_image_reshaped}")
@@ -227,4 +234,4 @@ class DataExtractor:
             # print(f"Append {index}: label: {gdf['id'].iloc[index]}")
             X = np.vstack((X, out_image_reshaped))
 
-        return DataExtractor(X, y, labels_map)
+        return DataExtractor(X, y, labels_map, extracted_points, indexes_extracted_points)

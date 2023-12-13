@@ -279,6 +279,12 @@ class RStack(ProcessBase):
             if src.res != test_src.res:
                 raise ValueError("Raster data must have the same spacial resolution")
 
+    def _update_count(self, srcs):
+        total_count = 0
+        for src in srcs:
+            total_count += src.meta["count"]
+        return total_count
+
     def run(self):
         self.outputs = {}
         with ExitStack() as stack_files:
@@ -289,7 +295,7 @@ class RStack(ProcessBase):
                 self.outputs[name] = srcs
                 metadata = srcs[0].profile
                 metadata.update(driver="GTiff")
-                metadata.update(count=len(self.outputs[name]))
+                metadata.update(count=self._update_count(srcs))
                 metadata.update(dtype=self.dtype)
 
                 outdir = self._create_outdir()
