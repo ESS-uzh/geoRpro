@@ -432,9 +432,9 @@ class RExtractPoints(ProcessBase):
     def points(self, points_param) -> None:
         shape_file = points_param[0]
         crs = points_param[1]
-        import pdb
+        #import pdb
 
-        pdb.set_trace()
+        #pdb.set_trace()
 
         gdf = gpd.read_file(shape_file)
         gdf = gdf.to_crs(f"EPSG:{crs}")
