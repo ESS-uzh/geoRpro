@@ -34,12 +34,30 @@ The outdir (data output) is -> /home/diego/work/dev/data/test_data_out
  B08_masked
  B12_masked
 
-
 #### Calculate ndvi and nbr indexes ####
  Calculate the indexes on the masked bands
 
 ### Stacks bands together ###
  Create rasters 
+
+
+
+- driver_example_from_stack.json
+
+### Extract a band from a stack ###
+  The parameters Bands is a list that can accept one or more comma separate values (bands number)
+
+
+
+- driver_example_normalize.json 
+
+### Extract bands from a stack ###
+  In this example we select the RGB bands of an hyperspectral cude (aviris-ng)
+
+### Normalize ###
+  This step takes the RGB from the previous step and normalize the values between 1 - 255
+  setting no data values to 0. It produces an 8-bit georaster 
+  
 
 
 

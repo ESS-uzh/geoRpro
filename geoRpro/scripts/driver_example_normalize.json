@@ -1,0 +1,23 @@
+{
+    "RExtractBands": {
+        "Inputs": {
+            "ang20210630t132013_rfl_rgb": "ang20210630t132013_rfl"
+        },
+        "Indir": "/home/diego/work/projects/ares",
+        "Outdir": "/home/diego/work/projects/ares",
+        "Bands": [
+            54,
+            36,
+            18
+        ]
+    },
+    "RNormalize": {
+        "Inputs": {
+            "ang20210630t132013_rfl_rgb_norm": "ang20210630t132013_rfl_rgb.tif"
+        },
+        "Indir": "/home/diego/work/projects/ares",
+        "Outdir": "/home/diego/work/projects/ares",
+        "Smin": 1,
+        "Smax": 255
+    }
+}

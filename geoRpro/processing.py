@@ -7,6 +7,7 @@ from contextlib import ExitStack
 
 import rasterio
 import random
+import numpy as np
 from shapely.geometry import Polygon, Point
 from rasterio.io import DatasetReader
 
@@ -260,6 +261,104 @@ class RReplace(ProcessBase):
                 self.outputs[name] = fpath
 
 
+class RNormalize(ProcessBase):
+    """
+    Normalize the values of a georaster.
+    It uses this formula to normalize:
+
+    ( x - min(x) ) * (smax - smin) / ( max(x) - min(x) ) + smin
+
+    Example:
+
+    smin=0; smax=255 (This normalize between 0 and 255)
+    ( x - min(x) ) * (smax - smin) / ( max(x) - min(x) ) + smin
+    if
+    min(OldRaster) = -1
+    max(OldRaster) = 1
+    NewRaster = ( OldRaster - -1 ) * 255 / ( 1 - -1 ) + 0
+
+    Attributes
+    ----------
+
+    instructions: dict
+                  List of attributes necessary to create an
+                  instance of the class and to the run main method (self.run)
+                  Required and optional attributes are specified in the
+                  INSTRUCTIONS class attribute
+
+    smin: int
+            E.g. 1
+
+    smax: int
+            E.g 255
+
+    NodataValue: float
+           Eg -9999.0
+
+    Replace_ndv: int/float
+           Eg 0
+
+    """
+
+    INSTRUCTIONS = {
+        "Inputs",
+        "Indir",
+        "Outdir",
+        "Satellite",
+        "Smin",
+        "Smax",
+        "NodataValue",
+        "ReplaceNdv",
+        "Dtype",
+    }
+
+    def __init__(self, instructions):
+        super().__init__(instructions)
+        self.smin = self.instructions.get("Smin")
+        self.smax = self.instructions.get("Smax")
+        self.nodata_value = self.instructions.get("NodataValue", -9999.0)
+        self.replace_ndv = self.instructions.get("ReplaceNdv", 0.0)
+        self.dtype = self.instructions.get("Dtype", "uint8")
+
+    def _normalize_arr(self, arr):
+        # round floats to second decimal number
+        arr = np.round(arr, 2)
+        arr[arr == self.nodata_value] = np.nan
+        min_ = np.nanmin(arr)
+        max_ = np.nanmax(arr)
+        arr_norm = (arr - min_) * self.smax / (max_ - min_) + self.smin
+        # replace nan with 0
+        arr_norm = np.nan_to_num(arr_norm, nan=self.replace_ndv)
+
+        # round and convert array to integer
+        return np.rint(arr_norm).astype(np.uint8)
+
+    def run(self) -> None:
+        self.outputs: dict[str, Any] = {}
+
+        with ExitStack() as stack_files:
+            self.outputs = {
+                k: stack_files.enter_context(rasterio.open(v))
+                for (k, v) in self.inputs.items()
+            }
+            for name, src in self.outputs.items():
+                print(f"Normalizing {name}")
+                arr, meta = rst.load(src)
+                arr_normalized = self._normalize_arr(arr)
+                # import pdb
+
+                # pdb.set_trace()
+                metadata: dict[str, Any] = src.profile
+                metadata.update(driver="GTiff")
+                metadata.update(nodata=int(self.replace_ndv))
+                metadata.update(dtype=self.dtype)
+                outdir = self._create_outdir()
+
+                fpath = os.path.join(outdir, name + ".tif")
+                io.write_array_as_raster(arr_normalized, metadata, fpath)
+                self.outputs[name] = fpath
+
+
 class RStack(ProcessBase):
     INSTRUCTIONS = {"Inputs", "Indir", "Outdir", "Satellite", "Dtype"}
 
@@ -401,12 +500,15 @@ class RExtractBands(ProcessBase):
 
             for idx, (name, src) in enumerate(self.outputs.items()):
                 # print(f"Band: {name}")
-                arr, meta = rst.load(src, bands=[idx + 1])
+                arr, meta = rst.load(src, bands=self.bands)
+                metadata = src.profile
+                metadata.update(driver="GTiff")
+                metadata.update(count=len(self.bands))
 
                 outdir = self._create_outdir()
 
                 fpath = os.path.join(outdir, name + ".tif")
-                io.write_array_as_raster(arr, meta, fpath)
+                io.write_array_as_raster(arr, metadata, fpath)
                 self.outputs[name] = fpath
 
 
@@ -432,9 +534,9 @@ class RExtractPoints(ProcessBase):
     def points(self, points_param) -> None:
         shape_file = points_param[0]
         crs = points_param[1]
-        #import pdb
+        # import pdb
 
-        #pdb.set_trace()
+        # pdb.set_trace()
 
         gdf = gpd.read_file(shape_file)
         gdf = gdf.to_crs(f"EPSG:{crs}")
@@ -544,12 +646,12 @@ class RRandomizePoints(ProcessBase):
 
 
 if __name__ == "__main__":
-    ORIGIN: Final[
-        str
-    ] = "/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA"
-    SHAPE: Final[
-        str
-    ] = "/home/diego/work/dev/github/geoRpro/tests/data/point_to_extract.shp"
+    ORIGIN: Final[str] = (
+        "/home/diego/work/dev/data/test_data/S2A_MSIL2A_20190906T073611_N0213_R092_T37MBN_20190906T110000.SAFE/GRANULE/L2A_T37MBN_A021968_20190906T075543/IMG_DATA"
+    )
+    SHAPE: Final[str] = (
+        "/home/diego/work/dev/github/geoRpro/tests/data/point_to_extract.shp"
+    )
     DATADIR: Final[str] = "/home/diego/work/dev/data/test_data_extract"
     # inst0: Final[dict[str, Any]] = {
     #    "Inputs": {

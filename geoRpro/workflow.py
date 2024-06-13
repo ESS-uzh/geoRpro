@@ -18,6 +18,7 @@ class Workflow:
         "RPrepro",
         "RMask",
         "RReplace",
+        "RNormalize",
         "RStack",
         "RIndex",
         "RExtractBands",

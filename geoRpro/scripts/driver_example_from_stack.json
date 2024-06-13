@@ -1,13 +1,21 @@
 {
     "RExtractBands": {
         "Inputs": {
-            "band1_from_stack": "stack1.tif",
+            "band1_from_stack": "stack1.tif"
+        },
+        "Indir": "/home/diego/work/dev/data/test_data",
+        "Outdir": "/home/diego/work/dev/data/test_data_out_new",
+        "Bands": [
+            1
+        ]
+    },
+    "RExtractBands": {
+        "Inputs": {
             "band2_from_stack": "stack1.tif"
         },
         "Indir": "/home/diego/work/dev/data/test_data",
         "Outdir": "/home/diego/work/dev/data/test_data_out_new",
         "Bands": [
-            1,
             2
         ]
     },
