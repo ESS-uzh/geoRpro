@@ -7,7 +7,7 @@ import geopandas as gpd
 
 import geoRpro.processing as prc
 import geoRpro.io as io
-from geoRpro.raster import Indexes
+from geoRpro.raster import Indexes, load
 
 from typing import Generator, Any, Final
 

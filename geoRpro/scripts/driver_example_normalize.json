@@ -18,6 +18,7 @@
         "Indir": "/home/diego/work/projects/ares",
         "Outdir": "/home/diego/work/projects/ares",
         "Smin": 1,
-        "Smax": 255
+        "Smax": 255,
+        "NoDataValue": -9999
     }
 }

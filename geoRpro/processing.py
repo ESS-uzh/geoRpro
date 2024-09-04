@@ -121,6 +121,8 @@ class RPrepro(ProcessBase):
                 for name, src in self.outputs.items():
                     print(f"Raster: {name} has {src.res[0]} m resolution..")
 
+                    pdb.set_trace()
+
                     # resample to match res param
                     if self.res and src.res[0] != self.res:
                         print(
@@ -263,7 +265,7 @@ class RReplace(ProcessBase):
 
 class RNormalize(ProcessBase):
     """
-    Normalize the values of a georaster.
+    Normalize the values of a georaster from 1 to 255 setting nodatavalues to zero
     It uses this formula to normalize:
 
     ( x - min(x) ) * (smax - smin) / ( max(x) - min(x) ) + smin
@@ -292,11 +294,8 @@ class RNormalize(ProcessBase):
     smax: int
             E.g 255
 
-    NodataValue: float
-           Eg -9999.0
-
-    Replace_ndv: int/float
-           Eg 0
+    NodataValue: int
+           Eg -9999
 
     """
 
@@ -307,29 +306,25 @@ class RNormalize(ProcessBase):
         "Satellite",
         "Smin",
         "Smax",
-        "NodataValue",
-        "ReplaceNdv",
-        "Dtype",
+        "NoDataValue",
     }
 
     def __init__(self, instructions):
         super().__init__(instructions)
         self.smin = self.instructions.get("Smin")
         self.smax = self.instructions.get("Smax")
-        self.nodata_value = self.instructions.get("NodataValue", -9999.0)
-        self.replace_ndv = self.instructions.get("ReplaceNdv", 0.0)
-        self.dtype = self.instructions.get("Dtype", "uint8")
+        self.nodata_value = self.instructions.get("NoDataValue", None)
 
     def _normalize_arr(self, arr):
         # round floats to second decimal number
         arr = np.round(arr, 2)
-        arr[arr == self.nodata_value] = np.nan
+        if self.nodata_value is not None:
+            arr[arr == self.nodata_value] = np.nan
         min_ = np.nanmin(arr)
         max_ = np.nanmax(arr)
         arr_norm = (arr - min_) * self.smax / (max_ - min_) + self.smin
         # replace nan with 0
-        arr_norm = np.nan_to_num(arr_norm, nan=self.replace_ndv)
-
+        arr_norm = np.nan_to_num(arr_norm)
         # round and convert array to integer
         return np.rint(arr_norm).astype(np.uint8)
 
@@ -350,8 +345,8 @@ class RNormalize(ProcessBase):
                 # pdb.set_trace()
                 metadata: dict[str, Any] = src.profile
                 metadata.update(driver="GTiff")
-                metadata.update(nodata=int(self.replace_ndv))
-                metadata.update(dtype=self.dtype)
+                metadata.update(nodata=0)
+                metadata.update(dtype=np.uint8)
                 outdir = self._create_outdir()
 
                 fpath = os.path.join(outdir, name + ".tif")
