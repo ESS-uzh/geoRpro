@@ -121,8 +121,6 @@ class RPrepro(ProcessBase):
                 for name, src in self.outputs.items():
                     print(f"Raster: {name} has {src.res[0]} m resolution..")
 
-                    pdb.set_trace()
-
                     # resample to match res param
                     if self.res and src.res[0] != self.res:
                         print(
