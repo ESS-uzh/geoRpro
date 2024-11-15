@@ -314,10 +314,12 @@ class RNormalize(ProcessBase):
         self.nodata_value = self.instructions.get("NoDataValue", None)
 
     def _normalize_arr(self, arr):
-        # round floats to second decimal number
-        arr = np.round(arr, 2)
-        if self.nodata_value is not None:
-            arr[arr == self.nodata_value] = np.nan
+        # check for dtype array (this is for aviris)
+        if arr.dtype == "float32":
+            # round floats to second decimal number
+            arr = np.round(arr, 2)
+            if self.nodata_value is not None:
+                arr[arr == self.nodata_value] = np.nan
         min_ = np.nanmin(arr)
         max_ = np.nanmax(arr)
         arr_norm = (arr - min_) * self.smax / (max_ - min_) + self.smin
